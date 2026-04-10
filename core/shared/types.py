@@ -9,12 +9,14 @@ class TestResult:
     verdict: Literal["ACCEPTED", "REJECTED"]
     detail: dict          # datos adicionales específicos de cada prueba
 
+
 @dataclass
 class GroupVerdict:
     condition: str        # "independence" | "homogeneity" | "trend" | "outliers"
     individual_results: list[TestResult]
     resolved_verdict: Literal["ACCEPTED", "REJECTED", "INCONCLUSIVE"] | None
     hierarchy_applied: bool
+
 
 @dataclass
 class ValidationReport:
