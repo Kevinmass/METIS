@@ -1,0 +1,183 @@
+# Roadmap de Implementación: METIS — Etapa 1
+
+Este roadmap detalla los pasos para construir el núcleo estadístico y la interfaz de validación del Proyecto Integrador.
+
+> **Principio de diseño transversal:** El software detecta y advierte, pero no bloquea. La interpretación final recae en el criterio del ingeniero.
+
+---
+
+## 🧱 Fase 0: Fixtures de Validación (Pre-implementación)
+
+*Objetivo: Establecer la "verdad" matemática antes de escribir una sola línea de lógica de negocio. Sin esta base, los errores se descubren tarde y son costosos de corregir.*
+
+- [ ] **Construcción del dataset de referencia:** Extraer de la tesis del Mgter. Ganancias y del Excel manual al menos dos series hidrológicas completas con sus resultados conocidos (estadístico calculado, valor crítico y veredicto esperado para cada prueba).
+- [ ] **Casos de borde documentados:** Identificar y registrar casos límite: series con un dato en el umbral exacto del valor crítico, series con ceros o negativos, series con N muy pequeño.
+- [ ] **Criterio de aceptación por prueba:** Para cada una de las 8+ pruebas, definir por escrito cuál es el resultado esperado sobre los datasets de referencia. Este documento actúa como contrato de correctitud para la Fase 1.
+
+---
+
+## 🏗️ Fase 1A: Core Estadístico (Librería Pura)
+
+*Objetivo: Construir el motor de cálculo como una librería Python independiente, sin dependencias de API ni de interfaz. Esto garantiza que la matemática sea verificable en aislamiento.*
+
+- [ ] **Configuración del entorno:** Setup de Python 3.10+, entornos virtuales (`venv`) y gestión de dependencias (`pandas`, `scipy`, `numpy`, `statsmodels`).
+- [ ] **Módulo de Independencia:**
+    - Prueba de Anderson (principal): coeficiente de autocorrelación serial para desfasajes $k = 1, 2, 3...$, bandas de confianza al 95%, criterio del 10%.
+    - Prueba de Wald-Wolfowitz (verificación): cálculo de corridas, contraste con distribución normal.
+    - **Regla de jerarquía explícita:** Si Anderson acepta independencia, la serie se considera independiente aunque Wald-Wolfowitz rechace. Esta lógica debe estar encapsulada en una función `resolve_independence(anderson_result, ww_result) -> verdict`.
+- [ ] **Módulo de Homogeneidad:**
+    - Prueba de Helmert: análisis de signos, cálculo de S y C.
+    - Prueba t de Student: comparación de medias de dos submuestras.
+    - Prueba de Cramer: comparación robusta ante valores extremos.
+    - **Sin veredicto único agregado:** Las tres pruebas reportan resultados individualmente. No existe una función que las colapse en un solo booleano.
+- [ ] **Módulo de Tendencia:**
+    - Prueba de Mann-Kendall: no paramétrica, robusta ante atípicos.
+    - Prueba de Kolmogorov-Smirnov para tendencia: comparación de distribuciones acumuladas entre dos mitades de la serie.
+- [ ] **Módulo de Atípicos:**
+    - Método de Chow: distancia en desvíos estándar, valor crítico por tamaño muestral.
+    - Detección previa de logaritmos imposibles: validación de ceros y negativos antes de cualquier transformación logarítmica.
+- [ ] **Tests unitarios por módulo:** Cada función de prueba estadística debe tener tests que verifiquen los resultados contra los fixtures de la Fase 0. Se busca error cero frente al dataset de referencia.
+
+---
+
+## 🔌 Fase 1B: API (Capa de Transporte)
+
+*Objetivo: Exponer el core estadístico como servicio HTTP. Esta fase depende de que la Fase 1A esté completa y testeada.*
+
+- [ ] **Diseño del schema de respuesta (previo al código):**
+
+    Antes de implementar el endpoint, documentar el contrato de la API. Ejemplo de estructura:
+
+    ```json
+    {
+      "series_id": "string",
+      "n": 35,
+      "warnings": [
+        { "code": "NEGATIVE_VALUES", "affected_indices": [4, 17], "message": "..." }
+      ],
+      "validation": {
+        "independence": {
+          "verdict": "ACCEPTED",
+          "hierarchy_applied": false,
+          "anderson": { "statistic": 0.18, "critical_value": 0.27, "verdict": "ACCEPTED" },
+          "wald_wolfowitz": { "statistic": 1.94, "critical_value": 1.96, "verdict": "ACCEPTED" }
+        },
+        "homogeneity": {
+          "individual_verdicts_only": true,
+          "helmert": { "statistic": -3, "critical_range": [-5, 5], "verdict": "ACCEPTED" },
+          "t_student": { "statistic": 1.12, "critical_value": 2.03, "verdict": "ACCEPTED" },
+          "cramer": { "statistic": 0.87, "critical_value": 1.41, "verdict": "ACCEPTED" }
+        },
+        "trend": {
+          "mann_kendall": { "statistic": 0.31, "critical_value": 1.96, "verdict": "ACCEPTED" },
+          "kolmogorov_smirnov": { "statistic": 0.14, "critical_value": 0.23, "verdict": "ACCEPTED" }
+        },
+        "outliers": {
+          "chow": { "flagged_indices": [], "critical_value": 2.87, "verdict": "ACCEPTED" }
+        }
+      }
+    }
+    ```
+
+- [ ] **Endpoint `/validate` (FastAPI):**
+    - Recibe un JSON o CSV con la serie hidrológica.
+    - Ejecuta el pipeline completo del core estadístico.
+    - Devuelve el schema documentado arriba.
+- [ ] **Endpoint `/health`:** Verificación básica de disponibilidad del servicio.
+- [ ] **Manejo de errores de entrada:**
+    - Serie vacía o con menos de N datos mínimos.
+    - Tipos de datos inválidos (strings en lugar de números).
+    - Detección y reporte de ceros o negativos como `warning`, sin bloquear el pipeline.
+- [ ] **Documentación automática:** Configurar Swagger/OpenAPI (`/docs`) para la futura integración con el módulo de GeoAI.
+
+---
+
+## 💾 Fase 1C: Decisión de Persistencia
+
+*Objetivo: Definir el modelo de datos antes de construir la interfaz, para no tener que refactorizar la arquitectura a mitad del desarrollo.*
+
+- [ ] **Definir si los análisis se persisten:** ¿El usuario puede volver a ver un análisis previo? ¿Se almacena la serie original junto con los resultados?
+- [ ] **Modelo de almacenamiento:** Si se persiste, definir el motor (SQLite para MVP, PostgreSQL para producción) y el schema de tablas (`series`, `analysis_runs`, `results`).
+- [ ] **Exportación de informes:** Definir el formato de salida (PDF, JSON estructurado, Excel) y en qué fase se implementa. Este ítem impacta la Fase 3.
+
+---
+
+## 🎨 Fase 2: Interfaz de Usuario (Frontend)
+
+*Objetivo: Crear una plataforma visualmente robusta, profesional y orientada a la trazabilidad docente. Esta fase consume el schema de la API definido en la Fase 1B.*
+
+- [ ] **Módulo de ingesta de datos:**
+    - Componente de drag & drop para archivos Excel/CSV.
+    - Tabla interactiva para ingreso y edición manual de datos.
+    - Validación visual inmediata: resaltado de celdas con valores negativos o ceros antes de ejecutar el pipeline.
+- [ ] **Dashboard de resultados — Modo Semáforo:**
+    - Vista de estado general de la serie (todas las condiciones en un panel).
+    - Indicación visual diferenciada cuando pruebas dentro de una misma condición no coinciden (ej. Helmert rechaza pero t-Student y Cramer aceptan).
+- [ ] **Paneles expandibles por prueba (Modo Docente):**
+    - Cada prueba expone: estadístico calculado, valor crítico, veredicto individual y explicación teórica del mecanismo.
+    - Para la independencia: indicar explícitamente si se aplicó la jerarquía Anderson → Wald-Wolfowitz.
+    - Para la homogeneidad: no mostrar un veredicto único agregado; mostrar los tres resultados en paralelo con una nota que explique por qué pueden diferir.
+- [ ] **Visualizaciones:**
+    - Gráfico de dispersión temporal de la serie ingresada.
+    - Correlograma para la prueba de Anderson con bandas de confianza al 95%.
+    - (Fase 3) Superposición de distribuciones ajustadas sobre los puntos de la muestra.
+
+---
+
+## 📈 Fase 3: Análisis de Frecuencia
+
+*Objetivo: Integrar el ajuste probabilístico y la estimación de eventos de diseño sobre series validadas.*
+
+- [ ] **Motor de ajuste de distribuciones:**
+    - Implementar las 13 distribuciones de probabilidad del dominio (Gumbel, Log-Normal, Log-Pearson III, GEV, entre otras).
+    - Programar métodos de estimación de parámetros: Momentos, Máxima Verosimilitud y Máxima Entropía.
+- [ ] **Bondad de ajuste (criterio de selección):**
+    - Prueba Chi Cuadrado.
+    - Prueba de Kolmogorov-Smirnov de bondad de ajuste.
+    - Error Estándar de Ajuste (EEA).
+    - Tabla comparativa que permite al usuario seleccionar la distribución más adecuada con criterio objetivo.
+- [ ] **Cálculo de eventos de diseño:**
+    - Input: período de retorno $T$.
+    - Output: probabilidad anual de ocurrencia ($1/T$) y valor del evento extremo correspondiente.
+- [ ] **Gráfico de ajuste:** Superposición de la curva teórica seleccionada sobre los puntos del dataset original en escala de probabilidad.
+- [ ] **Exportación de informe:** Generación de un documento con la serie validada, las distribuciones ajustadas, los resultados de bondad de ajuste y el evento de diseño calculado.
+
+---
+
+## 🧪 Fase 4: QA, Documentación y Refinamiento
+
+*Objetivo: Asegurar precisión científica, estabilidad y preparación para la integración con el módulo de GeoAI.*
+
+- [ ] **Validación cruzada completa:** Comparar los resultados de la aplicación contra la tesis de maestría del Mgter. Ganancias y el Excel de referencia para todas las series documentadas. El criterio de aceptación es error cero en estadísticos y veredictos.
+- [ ] **Revisión del Modo Docente:** Revisar con el equipo técnico que los textos de cada prueba sean didácticamente correctos y reflejen fielmente el criterio del dominio (especialmente la jerarquía Anderson/Wald-Wolfowitz y el tratamiento de desacuerdos en homogeneidad).
+- [ ] **Finalización de la API para GeoAI:** Verificar que el endpoint `/validate` devuelve toda la información que el módulo de GeoAI necesita consumir. Complementar la documentación Swagger/OpenAPI.
+- [ ] **Testing de integración end-to-end:** Cargar una serie desde archivo → ejecutar pipeline → verificar resultados en UI → exportar informe → consumir la misma serie vía API.
+
+---
+
+## 🚀 Hitos de Entrega
+
+| Hito | Descripción | Criterio de aceptación verificable |
+| :--- | :--- | :--- |
+| **M0** | Fixtures listos | Los resultados esperados de todas las pruebas están documentados para al menos dos series reales de la tesis. |
+| **M1 (MVP)** | Core + API funcionando | El endpoint `/validate` reproduce con error cero los resultados del Excel de referencia para las series de la Fase 0. |
+| **M2 (Beta)** | UI completa | Un usuario sin conocimiento previo puede cargar una serie, leer el veredicto de cada prueba y entender por qué se rechazó o aceptó. |
+| **M3 (Final)** | Módulo de frecuencia + informes | El sistema produce un informe exportable con evento de diseño para un $T$ dado, validado contra la tesis. |
+
+---
+
+## 📦 Stack Tecnológico
+
+| Capa | Tecnología | Rol |
+| :--- | :--- | :--- |
+| Core estadístico | Python 3.10+, NumPy, Pandas, SciPy, statsmodels | Motor de cálculo independiente |
+| API | FastAPI | Capa de transporte HTTP |
+| Frontend | React.js o Streamlit | Interfaz de usuario |
+| Documentación API | Swagger / OpenAPI (incluido en FastAPI) | Integración futura con GeoAI |
+| Testing | pytest | Validación contra fixtures de referencia |
+
+---
+
+*Documento de trabajo interno — PI ISI UCC 2026*
+*Octavio Carpineti | Kevin Massholder*
+*Director: Dr. Ing. Carlos Catalini | Co-director: Mgter. Ing. Facundo Ganancias*
