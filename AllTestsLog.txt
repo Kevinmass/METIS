@@ -1,0 +1,24 @@
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> black --check .
+All done! ✨ 🍰 ✨
+24 files would be left unchanged.
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> ruff check .
+All checks passed!
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> pytest tests/unit/ -v
+================================================= test session starts =================================================
+platform win32 -- Python 3.13.7, pytest-7.4.3, pluggy-1.6.0 -- C:\Users\kevin\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS
+plugins: anyio-3.7.1, asyncio-0.21.1
+asyncio: mode=Mode.STRICT
+collected 0 items
+
+================================================ no tests ran in 0.01s ================================================
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> python -c "
+>> import pandas as pd
+>> from core.validation import run_validation_pipeline
+>> df = pd.read_csv('SerieNoFormato.txt', sep='\t')
+>> serie = df.iloc[:, 1].dropna()
+>> reporte = run_validation_pipeline(serie)
+>> print(reporte)
+>> "
+ValidationReport(n=40, warnings=[], independence=GroupVerdict(condition='independence', individual_results=[TestResult(name='Anderson Autocorrelation Test', statistic=0.19604739045744957, critical_value=0.3099032106965012, alpha=0.05, verdict='ACCEPTED', detail={'acf_lag1': -0.19604739045744957, 'acf_lag2': -0.11174861040192172, 'acf_lag3': -0.13844940924957588, 'n': 40}), TestResult(name='Wald-Wolfowitz Runs Test', statistic=0.9610849132757812, critical_value=1.959963984540054, alpha=0.05, verdict='ACCEPTED', detail={'observed_runs': 24, 'expected_runs': 21.0, 'n1': 20, 'n2': 20})], resolved_verdict='ACCEPTED', hierarchy_applied=False), homogeneity=GroupVerdict(condition='homogeneity', individual_results=[TestResult(name='Helmert Variance Homogeneity Test', statistic=1.3844515492735179, critical_value=2.5264509335792598, alpha=0.05, verdict='ACCEPTED', detail={'variance_first_half': 270.45273684210537, 'variance_second_half': 374.4287105263158, 'df1': 19, 'df2': 19}), TestResult(name='Student t Mean Homogeneity Test', statistic=0.0695620147306393, critical_value=2.024394163911969, alpha=0.05, verdict='ACCEPTED', detail={'mean_first_half': 42.57000000000001, 'mean_second_half': 42.964999999999996, 'p_value': 0.9449165009164187}), TestResult(name='Cramer-von Mises Distribution Homogeneity Test', statistic=0.08250000000000046, critical_value=0.461, alpha=0.05, verdict='ACCEPTED', detail={'p_value': 0.7094858703167451})], resolved_verdict=None, hierarchy_applied=False), trend=GroupVerdict(condition='trend', individual_results=[TestResult(name='Mann-Kendall Trend Test', statistic=0.582551728035463, critical_value=1.959963984540054, alpha=0.05, verdict='ACCEPTED', detail={'s_statistic': 51.0, 'variance_s': 7366.666666666667, 'trend_direction': 'increasing'}), TestResult(name='Kolmogorov-Smirnov Trend Test', statistic=0.2, critical_value=0.43006976178289963, alpha=0.05, verdict='ACCEPTED', detail={'p_value': 0.8319696107963263})], resolved_verdict='ACCEPTED', hierarchy_applied=False), outliers=GroupVerdict(condition='outliers', individual_results=[TestResult(name='Chow Outlier Test', statistic=1.8487463573091523, critical_value=3.487045629654893, alpha=0.05, verdict='ACCEPTED', detail={'outliers_indices': [], 'outliers_count': 0, 'log_transform_applied': True, 'warnings': [{'code': 'LOG_TRANSFORM_APPLIED', 'message': 'Transformación logarítmica aplicada correctamente', 'applied': True}]})], resolved_verdict='ACCEPTED', hierarchy_applied=False))
