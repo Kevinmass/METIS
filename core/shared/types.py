@@ -1,19 +1,20 @@
 from dataclasses import dataclass
 from typing import Literal
 
+
 @dataclass
 class TestResult:
     name: str
     statistic: float
     critical_value: float
-    alpha: float          # siempre 0.05
+    alpha: float  # siempre 0.05
     verdict: Literal["ACCEPTED", "REJECTED"]
-    detail: dict          # datos adicionales específicos de cada prueba
+    detail: dict  # datos adicionales específicos de cada prueba
 
 
 @dataclass
 class GroupVerdict:
-    condition: str        # "independence" | "homogeneity" | "trend" | "outliers"
+    condition: str  # "independence" | "homogeneity" | "trend" | "outliers"
     individual_results: list[TestResult]
     resolved_verdict: Literal["ACCEPTED", "REJECTED", "INCONCLUSIVE"] | None
     hierarchy_applied: bool
