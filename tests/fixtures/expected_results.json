@@ -1,0 +1,126 @@
+{
+  "series_referencia_1": {
+    "n": 35,
+    "independence": {
+      "anderson": {
+        "statistic": 0.18,
+        "critical_value": 0.27,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      },
+      "wald_wolfowitz": {
+        "statistic": 1.94,
+        "critical_value": 1.96,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      },
+      "resolved_verdict": "ACCEPTED",
+      "hierarchy_applied": false
+    },
+    "homogeneity": {
+      "helmert": {
+        "statistic": -3,
+        "critical_range": [-5, 5],
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      },
+      "t_student": {
+        "statistic": 1.12,
+        "critical_value": 2.03,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      },
+      "cramer": {
+        "statistic": 0.87,
+        "critical_value": 1.41,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      }
+    },
+    "trend": {
+      "mann_kendall": {
+        "statistic": 0.31,
+        "critical_value": 1.96,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      },
+      "kolmogorov_smirnov": {
+        "statistic": 0.14,
+        "critical_value": 0.23,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      }
+    },
+    "outliers": {
+      "chow": {
+        "statistic": 2.1,
+        "critical_value": 2.87,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED",
+        "flagged_indices": []
+      }
+    }
+  },
+  "series_referencia_2": {
+    "n": 50,
+    "independence": {
+      "anderson": {
+        "statistic": 0.35,
+        "critical_value": 0.27,
+        "alpha": 0.05,
+        "verdict": "REJECTED"
+      },
+      "wald_wolfowitz": {
+        "statistic": 1.85,
+        "critical_value": 1.96,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      },
+      "resolved_verdict": "ACCEPTED",
+      "hierarchy_applied": true
+    },
+    "homogeneity": {
+      "helmert": {
+        "statistic": 6,
+        "critical_range": [-5, 5],
+        "alpha": 0.05,
+        "verdict": "REJECTED"
+      },
+      "t_student": {
+        "statistic": 2.5,
+        "critical_value": 2.03,
+        "alpha": 0.05,
+        "verdict": "REJECTED"
+      },
+      "cramer": {
+        "statistic": 1.2,
+        "critical_value": 1.41,
+        "alpha": 0.05,
+        "verdict": "ACCEPTED"
+      }
+    },
+    "trend": {
+      "mann_kendall": {
+        "statistic": -2.1,
+        "critical_value": 1.96,
+        "alpha": 0.05,
+        "verdict": "REJECTED"
+      },
+      "kolmogorov_smirnov": {
+        "statistic": 0.3,
+        "critical_value": 0.23,
+        "alpha": 0.05,
+        "verdict": "REJECTED"
+      }
+    },
+    "outliers": {
+      "chow": {
+        "statistic": 3.5,
+        "critical_value": 2.87,
+        "alpha": 0.05,
+        "verdict": "REJECTED",
+        "flagged_indices": [15, 28]
+      }
+    }
+  }
+}
