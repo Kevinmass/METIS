@@ -17,6 +17,8 @@ def run_validation_pipeline(series: pd.Series) -> ValidationReport:
     Orquestador principal del pipeline de validación hidrológica.
     Ejecuta en orden los cuatro grupos de pruebas y devuelve el reporte completo.
     """
+    # Siempre eliminar valores nulos antes de procesar
+    series = series.dropna().reset_index(drop=True)
     n = len(series)
 
     # Paso 1: Detección de inconsistencias físicas

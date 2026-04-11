@@ -3,58 +3,58 @@
     "n": 35,
     "independence": {
       "anderson": {
-        "statistic": 0.18,
-        "critical_value": 0.27,
+        "statistic": 0.82,
+        "critical_value": 0.33,
         "alpha": 0.05,
-        "verdict": "ACCEPTED"
+        "verdict": "REJECTED"
       },
       "wald_wolfowitz": {
-        "statistic": 1.94,
+        "statistic": -3.94,
         "critical_value": 1.96,
         "alpha": 0.05,
-        "verdict": "ACCEPTED"
+        "verdict": "REJECTED"
       },
-      "resolved_verdict": "ACCEPTED",
-      "hierarchy_applied": false
+      "resolved_verdict": "REJECTED",
+      "hierarchy_applied": true
     },
     "homogeneity": {
       "helmert": {
-        "statistic": -3,
-        "critical_range": [-5, 5],
+        "statistic": 1.1,
+        "critical_range": [-2.7, 2.7],
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       },
       "t_student": {
-        "statistic": 1.12,
+        "statistic": 1.01,
         "critical_value": 2.03,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       },
       "cramer": {
-        "statistic": 0.87,
-        "critical_value": 1.41,
+        "statistic": 0.12,
+        "critical_value": 0.46,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       }
     },
     "trend": {
       "mann_kendall": {
-        "statistic": 0.31,
+        "statistic": 0.67,
         "critical_value": 1.96,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       },
       "kolmogorov_smirnov": {
-        "statistic": 0.14,
-        "critical_value": 0.23,
+        "statistic": 0.21,
+        "critical_value": 0.47,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       }
     },
     "outliers": {
       "chow": {
-        "statistic": 2.1,
-        "critical_value": 2.87,
+        "statistic": 1.94,
+        "critical_value": 3.48,
         "alpha": 0.05,
         "verdict": "ACCEPTED",
         "flagged_indices": []
@@ -65,61 +65,61 @@
     "n": 50,
     "independence": {
       "anderson": {
-        "statistic": 0.35,
+        "statistic": 0.84,
         "critical_value": 0.27,
         "alpha": 0.05,
         "verdict": "REJECTED"
       },
       "wald_wolfowitz": {
-        "statistic": 1.85,
+        "statistic": -4.86,
         "critical_value": 1.96,
         "alpha": 0.05,
-        "verdict": "ACCEPTED"
+        "verdict": "REJECTED"
       },
-      "resolved_verdict": "ACCEPTED",
+      "resolved_verdict": "REJECTED",
       "hierarchy_applied": true
     },
     "homogeneity": {
       "helmert": {
-        "statistic": 6,
-        "critical_range": [-5, 5],
+        "statistic": 1.1,
+        "critical_range": [-2.27, 2.27],
         "alpha": 0.05,
-        "verdict": "REJECTED"
+        "verdict": "ACCEPTED"
       },
       "t_student": {
-        "statistic": 2.5,
-        "critical_value": 2.03,
+        "statistic": 1.46,
+        "critical_value": 2.01,
         "alpha": 0.05,
-        "verdict": "REJECTED"
+        "verdict": "ACCEPTED"
       },
       "cramer": {
-        "statistic": 1.2,
-        "critical_value": 1.41,
+        "statistic": 0.21,
+        "critical_value": 0.46,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       }
     },
     "trend": {
       "mann_kendall": {
-        "statistic": -2.1,
+        "statistic": 1.8,
         "critical_value": 1.96,
         "alpha": 0.05,
-        "verdict": "REJECTED"
+        "verdict": "ACCEPTED"
       },
       "kolmogorov_smirnov": {
-        "statistic": 0.3,
-        "critical_value": 0.23,
+        "statistic": 0.2,
+        "critical_value": 0.38,
         "alpha": 0.05,
-        "verdict": "REJECTED"
+        "verdict": "ACCEPTED"
       }
     },
     "outliers": {
       "chow": {
-        "statistic": 3.5,
-        "critical_value": 2.87,
+        "statistic": 2.75,
+        "critical_value": 3.51,
         "alpha": 0.05,
-        "verdict": "REJECTED",
-        "flagged_indices": [15, 28]
+        "verdict": "ACCEPTED",
+        "flagged_indices": []
       }
     }
   }

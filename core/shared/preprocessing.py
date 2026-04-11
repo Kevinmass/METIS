@@ -44,7 +44,7 @@ def detect_physical_inconsistencies(series: pd.Series) -> list[dict]:
     """
     warnings = []
 
-    nan_count = series.isna().sum()
+    nan_count = int(series.isna().sum())
     if nan_count > 0:
         warnings.append(
             {
@@ -55,7 +55,7 @@ def detect_physical_inconsistencies(series: pd.Series) -> list[dict]:
             }
         )
 
-    zero_count = (series == 0).sum()
+    zero_count = int((series == 0).sum())
     if zero_count > 0:
         warnings.append(
             {
@@ -66,7 +66,7 @@ def detect_physical_inconsistencies(series: pd.Series) -> list[dict]:
             }
         )
 
-    negative_count = (series < 0).sum()
+    negative_count = int((series < 0).sum())
     if negative_count > 0:
         warnings.append(
             {
