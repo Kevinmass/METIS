@@ -1,111 +1,130 @@
-# Schema de Respuesta de la API — Contrato para Etapa 2
+# Schema de Respuesta de la API - Contrato para Etapa 2
 
-Este documento define el contrato completo de la API antes de su implementación. La API debe devolver exactamente este schema para garantizar compatibilidad futura con el módulo de GeoAI.
+Este documento define el contrato vigente de la API REST de METIS para la etapa 2. La implementacion de `FastAPI`, los tests de integracion y este documento quedaron alineados.
 
-## Endpoint: `POST /validate`
+## Endpoints disponibles
 
-### Request Body
+### `GET /health`
+
+Respuesta esperada:
+
 ```json
 {
-  "series": [1.2, 3.4, 5.6, ...],  // Lista de floats
-  "series_id": "optional_string"    // Opcional, para trazabilidad
+  "status": "ok",
+  "version": "1.0.0"
 }
 ```
 
-### Response Body
+### `POST /validate`
+
+Request body:
+
 ```json
 {
-  "series_id": "string",  // Echo del request o generado
-  "n": 35,                // Número de datos en la serie
-  "warnings": [           // Advertencias físicas, nunca bloquean el análisis
-    {
-      "code": "NEGATIVE_VALUES",
-      "affected_indices": [4, 17],
-      "message": "Se detectaron valores negativos en los índices 4 y 17. Se aplicará transformación logarítmica con advertencia."
-    },
+  "series_id": "serie_referencia_1",
+  "series": [1.2, 3.4, 5.6]
+}
+```
+
+Response body:
+
+```json
+{
+  "series_id": "serie_referencia_1",
+  "n": 35,
+  "warnings": [
     {
       "code": "ZERO_VALUES",
-      "affected_indices": [10],
-      "message": "Se detectaron valores cero en el índice 10. La transformación logarítmica fallará silenciosamente."
+      "message": "Se encontraron 1 valores iguales a cero",
+      "affected_indices": [10]
     }
   ],
   "validation": {
     "independence": {
-      "verdict": "ACCEPTED",  // "ACCEPTED" | "REJECTED" | "INCONCLUSIVE"
-      "hierarchy_applied": false,  // true si Anderson rechaza pero WW acepta
+      "verdict": "REJECTED",
+      "hierarchy_applied": true,
       "anderson": {
-        "statistic": 0.18,
-        "critical_value": 0.27,
+        "statistic": 0.82,
+        "critical_value": 0.33,
         "alpha": 0.05,
-        "verdict": "ACCEPTED"
+        "verdict": "REJECTED"
       },
       "wald_wolfowitz": {
-        "statistic": 1.94,
+        "statistic": -3.94,
         "critical_value": 1.96,
         "alpha": 0.05,
-        "verdict": "ACCEPTED"
+        "verdict": "REJECTED"
       }
     },
     "homogeneity": {
-      "individual_verdicts_only": true,  // Siempre true, no hay veredicto agregado
+      "individual_verdicts_only": true,
       "helmert": {
-        "statistic": -3,
-        "critical_range": [-5, 5],
+        "statistic": 1.1,
+        "critical_value": 2.7,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       },
       "t_student": {
-        "statistic": 1.12,
+        "statistic": 1.01,
         "critical_value": 2.03,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       },
       "cramer": {
-        "statistic": 0.87,
-        "critical_value": 1.41,
+        "statistic": 0.12,
+        "critical_value": 0.46,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       }
     },
     "trend": {
       "mann_kendall": {
-        "statistic": 0.31,
+        "statistic": 0.67,
         "critical_value": 1.96,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       },
       "kolmogorov_smirnov": {
-        "statistic": 0.14,
-        "critical_value": 0.23,
+        "statistic": 0.21,
+        "critical_value": 0.47,
         "alpha": 0.05,
         "verdict": "ACCEPTED"
       }
     },
     "outliers": {
       "chow": {
-        "statistic": 2.1,
-        "critical_value": 2.87,
+        "statistic": 1.94,
+        "critical_value": 3.48,
         "alpha": 0.05,
         "verdict": "ACCEPTED",
-        "flagged_indices": []  // Lista vacía si no hay atípicos
+        "flagged_indices": []
       }
     }
   }
 }
 ```
 
-### Campos Obligatorios
-- Todos los campos mostrados son obligatorios.
-- `warnings` puede ser una lista vacía.
-- `flagged_indices` en outliers puede ser lista vacía.
-- `hierarchy_applied` en independence debe reflejar si se aplicó la regla Anderson → Wald-Wolfowitz.
+### `POST /validate/file`
 
-### Códigos de Error
-- `400 Bad Request`: Serie vacía o con menos de 3 datos.
-- `422 Unprocessable Entity`: Datos no numéricos.
-- `200 OK`: Siempre devuelve análisis completo, incluso con warnings.
+Acepta `multipart/form-data` con un archivo `file` en formato `.csv`, `.xls` o `.xlsx`.
 
-### Notas de Diseño
-- El schema es extensible para futuras etapas (frecuencia, etc.).
-- Los `statistic` y `critical_value` deben coincidir exactamente con los calculados en el core.
-- El módulo de GeoAI consumirá este endpoint, por lo que cualquier cambio requiere coordinación.
+## Campos obligatorios
+
+- `series` es obligatorio en `POST /validate`.
+- `series_id` es opcional en `POST /validate`; si no se envia, la API genera uno automaticamente.
+- `warnings` puede ser una lista vacia.
+- `validation.independence.hierarchy_applied` siempre refleja si se aplico la jerarquia Anderson -> Wald-Wolfowitz.
+- `validation.homogeneity.individual_verdicts_only` siempre es `true`.
+- `validation.outliers.chow.flagged_indices` puede ser una lista vacia.
+
+## Codigos de error
+
+- `400 Bad Request`: serie vacia, archivo vacio o serie con menos de 3 datos.
+- `422 Unprocessable Entity`: datos no numericos o archivo malformado.
+- `200 OK`: la API devuelve el analisis completo aun cuando existan warnings fisicos.
+
+## Notas de diseno
+
+- Los estadisticos y valores criticos deben coincidir con el `core`.
+- La estructura JSON esta preparada para ser consumida por frontend y por futuras integraciones.
+- Swagger UI queda disponible en `/docs` y ReDoc en `/redoc`.

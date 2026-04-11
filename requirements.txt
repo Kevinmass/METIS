@@ -2,3 +2,7 @@ pandas
 scipy
 numpy
 statsmodels
+fastapi
+uvicorn
+python-multipart
+openpyxl

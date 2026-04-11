@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routers import validate
+from api.schemas.validation import HealthResponse
 
 
 app = FastAPI(
@@ -25,6 +26,11 @@ app.add_middleware(
 app.include_router(validate.router, prefix="", tags=["validate"])
 
 
-@app.get("/health", summary="Health Check", description="Verifica estado del servicio")
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Health Check",
+    description="Verifica estado del servicio",
+)
 async def health_check():
     return {"status": "ok", "version": app.version}
