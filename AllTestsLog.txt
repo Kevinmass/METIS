@@ -5,71 +5,16 @@ cachedir: .pytest_cache
 rootdir: C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS
 plugins: anyio-3.7.1, asyncio-0.21.1
 asyncio: mode=Mode.STRICT
-collected 2 items
+collected 3 items
 
-tests/unit/test_pipeline.py::test_series_referencia_1 FAILED                                                     [ 50%]
-tests/unit/test_pipeline.py::test_series_referencia_2 FAILED                                                     [100%]
+tests/unit/test_independence.py::test_resolve_independence_accepts_when_anderson_accepts_and_ww_rejects PASSED   [ 33%]
+tests/unit/test_pipeline.py::test_series_referencia_1 PASSED                                                     [ 66%]
+tests/unit/test_pipeline.py::test_series_referencia_2 PASSED                                                     [100%]
 
-====================================================== FAILURES =======================================================
-______________________________________________ test_series_referencia_1 _______________________________________________
-
-    def test_series_referencia_1():
-        """Prueba completa contra serie referencia 1"""
-        """todos los resultados deben coincidir exactamente"""
-        fixtures_path = Path(__file__).parent.parent / "fixtures"
-
-        with (fixtures_path / "expected_results.json").open() as f:
-            expected = json.load(f)["series_referencia_1"]
-
-        # Cargar serie de referencia (tomar solo la columna numérica de caudal)
-        df = pd.read_csv(fixtures_path / "series_referencia_1.csv")
-        serie = df.iloc[:, 1].squeeze().dropna().iloc[:35]
-
-        report = run_validation_pipeline(serie)
-
-        # Validar campos básicos
-        assert report.n == expected["n"]
-
-        # Validar Independencia
->       assert (
-            report.independence.resolved_verdict
-            == expected["independence"]["resolved_verdict"]
-        )
-E       AssertionError: assert 'REJECTED' == 'ACCEPTED'
-E         - ACCEPTED
-E         + REJECTED
-
-tests\unit\test_pipeline.py:30: AssertionError
-______________________________________________ test_series_referencia_2 _______________________________________________
-
-    def test_series_referencia_2():
-        """Prueba completa contra serie referencia 2"""
-        """todos los resultados deben coincidir exactamente"""
-        fixtures_path = Path(__file__).parent.parent / "fixtures"
-
-        with (fixtures_path / "expected_results.json").open() as f:
-            expected = json.load(f)["series_referencia_2"]
-
-        # Cargar serie de referencia (tomar solo la columna numérica de caudal)
-        df = pd.read_csv(fixtures_path / "series_referencia_2.csv")
-        serie = df.iloc[:, 1].squeeze().dropna().iloc[:50]
-
-        report = run_validation_pipeline(serie)
-
-        # Validar campos básicos
-        assert report.n == expected["n"]
-
-        # Validar Independencia
->       assert (
-            report.independence.resolved_verdict
-            == expected["independence"]["resolved_verdict"]
-        )
-E       AssertionError: assert 'REJECTED' == 'ACCEPTED'
-E         - ACCEPTED
-E         + REJECTED
-
-tests\unit\test_pipeline.py:114: AssertionError
-=============================================== short test summary info ===============================================
-FAILED tests/unit/test_pipeline.py::test_series_referencia_1 - AssertionError: assert 'REJECTED' == 'ACCEPTED'
-FAILED tests/unit/test_pipeline.py::test_series_referencia_2 - AssertionError: assert 'REJECTED' == 'ACCEPTED'
-================================================== 2 failed in 1.12s ==================================================
+================================================== 3 passed in 1.61s ==================================================
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> black --check .
+All done! ✨ 🍰 ✨
+26 files would be left unchanged.
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> ruff check .
+All checks passed!
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS>
