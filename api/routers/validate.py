@@ -1,3 +1,4 @@
+import io
 from typing import Annotated
 from uuid import uuid4
 
@@ -184,10 +185,13 @@ async def validate_file(
         raise HTTPException(status_code=400, detail="No se proporcionó ningún archivo")
 
     try:
+        file_bytes = await file.read()
+        buffer = io.BytesIO(file_bytes)
+
         if file.filename.endswith(".csv"):
-            df = pd.read_csv(file.file, header=None)
+            df = pd.read_csv(buffer, header=None)
         elif file.filename.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(file.file, header=None)
+            df = pd.read_excel(buffer, header=None, engine="openpyxl")
         else:
             unsupported_file_type()
 
