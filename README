@@ -178,6 +178,63 @@ Este roadmap detalla los pasos para construir el núcleo estadístico y la inter
 
 ---
 
+## Desarrollo local
+
+### Opción rápida (recomendada)
+
+```bash
+./dev.sh
+```
+
+Arranca API y frontend automáticamente.
+
+### Manual
+
+1. **API:**
+   ```bash
+   uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
+   ```
+
+2. **Frontend:**
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+
+### Tests
+
+- **Unitarios:** `pytest tests/unit/`
+- **Integración:** `pytest tests/integration/`
+- **E2E:** `pytest tests/e2e/` (requiere servicios corriendo)
+
+## Frontend local
+
+Para arrancar el frontend:
+
+1. `cd frontend`
+2. `npm install`
+3. `npm run dev`
+
+El frontend consulta la API en `http://127.0.0.1:8000` y consume el endpoint `POST /validate`.
+
+### Características implementadas
+
+- ✅ Ingesta manual de datos con tabla editable
+- ✅ Drag & drop para archivos CSV y Excel (.xlsx, .xls)
+- ✅ Validación visual de valores cero/negativos
+- ✅ Dashboard semáforo con estado de las 4 condiciones
+- ✅ Paneles expandibles por prueba con explicaciones
+- ✅ Gráficos de dispersión temporal y correlograma preliminar
+- ✅ Tests E2E con Playwright
+
+### Tests E2E
+
+Ejecutar con: `pytest tests/e2e/ -v`
+
+Requiere que la API y el frontend estén corriendo en background.
+
+---
+
 *Documento de trabajo interno — PI ISI UCC 2026*
 *Octavio Carpineti | Kevin Massholder*
 *Director: Dr. Ing. Carlos Catalini | Co-director: Mgter. Ing. Facundo Ganancias*

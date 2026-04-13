@@ -1,0 +1,288 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #08101f;
+  color: #e7edf8;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+a {
+  color: #7dd3fc;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.app-shell {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 2.4vw, 3rem);
+}
+
+.page-header p {
+  margin: 0;
+  max-width: 42rem;
+  opacity: 0.85;
+}
+
+.panel {
+  background: #111b2f;
+  border: 1px solid #1f2e47;
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.section-grid {
+  display: grid;
+  gap: 18px;
+}
+
+@media (min-width: 900px) {
+  .section-grid {
+    grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.2fr);
+  }
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #1f2e47;
+  background: #0f1a2f;
+  color: #e7edf8;
+  padding: 12px 14px;
+}
+
+input:focus,
+textarea:focus {
+  outline: 2px solid #3b82f6;
+}
+
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.button-primary {
+  border: none;
+  color: white;
+  background: #2563eb;
+  padding: 12px 20px;
+  border-radius: 12px;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.button-primary:hover {
+  transform: translateY(-1px);
+  background: #1d4ed8;
+}
+
+.button-secondary {
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  background: transparent;
+  padding: 12px 20px;
+  border-radius: 12px;
+}
+
+.warning-banner,
+.error-banner {
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.warning-banner {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.error-banner {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.status-grid {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 720px) {
+  .status-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.status-card {
+  border-radius: 16px;
+  padding: 18px;
+  background: #0f172a;
+  border: 1px solid #1f2937;
+}
+
+.status-card strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
+.status-card .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  width: fit-content;
+}
+
+.pill.accepted {
+  background: rgba(16, 185, 129, 0.16);
+  color: #a7f3d0;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.pill.rejected {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.pill.inconclusive {
+  background: rgba(250, 204, 21, 0.16);
+  color: #fef08a;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 16px;
+  border: 1px solid #1f2e47;
+  margin-top: 12px;
+}
+
+.table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-wrapper th,
+.table-wrapper td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #1f2e47;
+}
+
+.table-wrapper th {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.table-wrapper td {
+  font-size: 0.95rem;
+}
+
+.cell-error {
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.accordion {
+  border-top: 1px solid #1f2e47;
+}
+
+.accordion-item {
+  border-bottom: 1px solid #1f2e47;
+}
+
+.accordion-button {
+  width: 100%;
+  padding: 16px 14px;
+  text-align: left;
+  color: #e2e8f0;
+  background: transparent;
+  border: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.accordion-button:hover {
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.accordion-panel {
+  padding: 0 14px 18px;
+}
+
+.chart-box {
+  width: 100%;
+  min-height: 220px;
+  padding: 14px;
+  background: #08101f;
+  border: 1px solid #1f2e47;
+  border-radius: 16px;
+}
+
+.chart-title {
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+small {
+  color: #94a3b8;
+}
+
+.file-dropzone {
+  border: 2px dashed #334155;
+  border-radius: 18px;
+  padding: 28px;
+  text-align: center;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.file-dropzone.dragover {
+  border-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.file-dropzone p {
+  margin: 0;
+}
+
+.file-dropzone strong {
+  display: block;
+  margin: 10px 0 5px;
+}
