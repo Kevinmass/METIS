@@ -95,3 +95,72 @@ tests\e2e\test_ui_ingesta.py:107: AssertionError
 FAILED tests/e2e/test_ui_graficos.py::test_ui_graficos_render[chromium] - AssertionError: Locator expected to be visible
 FAILED tests/e2e/test_ui_ingesta.py::test_ui_paneles_expandibles[chromium] - AssertionError: Locator expected to be visible
 ============================================ 2 failed, 7 passed in 17.32s =============================================
+
+
+"""
+def test_ui_graficos_render(page: Page):
+    
+    page.goto("http://localhost:5173")
+
+    # Ocultar input file
+    page.evaluate(
+        "document.querySelector('input[type=\"file\"]').style.display = 'none'"
+    )
+
+    # Sin datos - verificar que hay círculos por defecto (3 valores iniciales)
+    expect(page.locator("circle")).to_have_count(3)
+
+    # Agregar datos
+    page.click("text=Agregar fila")
+    page.click("text=Agregar fila")
+    page.click("text=Agregar fila")
+    page.locator("input[type='number']").nth(0).fill("1")
+    page.locator("input[type='number']").nth(1).fill("2")
+    page.locator("input[type='number']").nth(2).fill("3")
+
+    # Verificar gráficos aparecen
+    expect(page.locator("text=Dispersión temporal")).to_be_visible()
+    expect(page.locator("circle")).to_have_count(6)  # 3 iniciales + 3 agregadas
+
+    # Esperar a que React actualice el estado
+    page.wait_for_selector("text=Dispersión temporal")
+
+    # Verificar correlograma con pocos datos (busqueda parcial para no depender de texto exacto)
+    expect(page.locator("text=4")).to_be_visible()
+"""
+
+
+"""
+def test_ui_paneles_expandibles(page: Page):
+    
+    page.goto("http://localhost:5173")
+
+    # Ocultar input file
+    page.evaluate(
+        "document.querySelector('input[type=\"file\"]').style.display = 'none'"
+    )
+
+    # Cargar y analizar
+    page.set_input_files("input[type='file']", "tests/fixtures/series_referencia_1.csv")
+    page.click("text=Ejecutar análisis")
+
+    # Esperar que termine el analisis completamente
+    expect(page.locator(".status-grid")).to_be_visible()
+    
+    # Expandir panel de independencia
+    page.click("text=Independencia")
+    # Validacion robusta sin depender de texto exacto
+    expect(page.locator(".accordion-panel")).to_be_visible()
+    expect(page.locator(".veredicto")).to_be_visible()
+
+    # Verificar tablas de resultados
+    expect(page.locator("th:has-text('Estadístico')")).to_be_visible()
+
+    # Colapsar y expandir homogeneidad
+    page.click("text=Independencia")  # Colapsar
+    page.click("text=Homogeneidad")
+    expect(page.locator("text=No hay veredicto único.")).to_be_visible()
+    expect(page.locator("text=Helmert")).to_be_visible()
+    expect(page.locator("text=t-Student")).to_be_visible()
+    expect(page.locator("text=Cramer")).to_be_visible()
+"""

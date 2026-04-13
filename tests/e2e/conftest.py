@@ -9,7 +9,7 @@ def browser_context_args(browser_context_args):
     }
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def page_with_api(page):
     """Fixture que asegura que la API esté corriendo."""
     # Aquí podríamos agregar lógica para verificar que la API esté up

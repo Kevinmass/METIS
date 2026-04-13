@@ -84,40 +84,6 @@ def test_ui_resultados_semaforo(page: Page):
     # Verificar que al menos uno esté aceptado
     expect(page.locator(".pill.accepted")).to_have_count(2)
 
-"""
-def test_ui_paneles_expandibles(page: Page):
-    
-    page.goto("http://localhost:5173")
-
-    # Ocultar input file
-    page.evaluate(
-        "document.querySelector('input[type=\"file\"]').style.display = 'none'"
-    )
-
-    # Cargar y analizar
-    page.set_input_files("input[type='file']", "tests/fixtures/series_referencia_1.csv")
-    page.click("text=Ejecutar análisis")
-
-    # Esperar que termine el analisis completamente
-    expect(page.locator(".status-grid")).to_be_visible()
-    
-    # Expandir panel de independencia
-    page.click("text=Independencia")
-    # Validacion robusta sin depender de texto exacto
-    expect(page.locator(".accordion-panel")).to_be_visible()
-    expect(page.locator(".veredicto")).to_be_visible()
-
-    # Verificar tablas de resultados
-    expect(page.locator("th:has-text('Estadístico')")).to_be_visible()
-
-    # Colapsar y expandir homogeneidad
-    page.click("text=Independencia")  # Colapsar
-    page.click("text=Homogeneidad")
-    expect(page.locator("text=No hay veredicto único.")).to_be_visible()
-    expect(page.locator("text=Helmert")).to_be_visible()
-    expect(page.locator("text=t-Student")).to_be_visible()
-    expect(page.locator("text=Cramer")).to_be_visible()
-"""
 
 def test_ui_graficos(page: Page):
     """Test visualizaciones."""
