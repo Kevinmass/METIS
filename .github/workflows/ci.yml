@@ -50,6 +50,7 @@ jobs:
           python-version: "3.10"
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: playwright install --with-deps chromium
+      - run: npm install --prefix frontend
       - run: uvicorn api.main:app --host 0.0.0.0 --port 8000 &
       - run: npm --prefix frontend run dev &
       - run: sleep 5
