@@ -48,8 +48,8 @@ class TestResult:
     name: str
     statistic: float
     critical_value: float
-    alpha: float = 0.05
     verdict: Literal["ACCEPTED", "REJECTED"]
+    alpha: float = 0.05
     detail: dict = field(default_factory=dict)
 
 
