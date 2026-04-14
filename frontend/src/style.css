@@ -1,3 +1,26 @@
+/**
+ * Sistema de Diseño METIS - Estilos Globales
+ *
+ * Tema: Dark mode profesional para aplicación de validación hidrológica
+ * Paleta: Azules oscuros (#08101f, #0b1221) con acentos cian (#7dd3fc)
+ *
+ * Estructura:
+ *   - Variables CSS (custom properties en :root)
+ *   - Reset y estilos base
+ *   - Layout: app-shell, page-header, section-grid
+ *   - Componentes: panel, button-*, file-dropzone
+ *   - Estados: pill (accepted/rejected/inconclusive), cell-error
+ *   - Visualizaciones: gráficos SVG
+ *
+ * Responsive:
+ *   - Mobile-first con clamp() para escalado tipográfico
+ *   - Grid adaptable para paneles
+ */
+
+/* ==========================================================================
+   VARIABLES CSS
+   ========================================================================== */
+
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -5,6 +28,10 @@
   color: #e7edf8;
   line-height: 1.5;
 }
+
+/* ==========================================================================
+   RESET Y BASE
+   ========================================================================== */
 
 * {
   box-sizing: border-box;

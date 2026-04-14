@@ -1,3 +1,23 @@
+"""Tests de regresión contra series de referencia documentadas.
+
+Este módulo contiene tests de integración del core estadístico que verifican
+que los resultados del pipeline coincidan con los valores documentados en
+las series de referencia extraídas de la tesis del Mgter. Ganancias.
+
+Fixtures utilizados:
+    - series_referencia_1.csv: Serie de 35 observaciones
+    - series_referencia_2.csv: Serie de 50 observaciones
+    - expected_results.json: Veredictos y estadísticos esperados
+
+Criterio de aceptación:
+    - Veredictos deben coincidir exactamente
+    - Estadísticos deben coincidir dentro de tolerancia (1e-2)
+
+Tolerancia explicada:
+    Se permite diferencia de 0.01 en estadísticos debido a diferencias
+    en precisión de punto flotante entre implementaciones (Excel vs Python).
+"""
+
 import json
 from pathlib import Path
 
@@ -6,12 +26,28 @@ import pandas as pd
 from core.validation import run_validation_pipeline
 
 
+# Tolerancia para comparación de estadísticos (diferencias de precisión float)
 STATISTIC_COMPARISON_TOLERANCE = 1e-2
 
 
 def test_series_referencia_1():
-    """Prueba completa contra serie referencia 1"""
-    """todos los resultados deben coincidir exactamente"""
+    """Test de regresión completo contra serie de referencia 1 (n=35).
+
+    Ejecuta el pipeline de validación sobre la serie de referencia 1 y
+    compara todos los resultados contra los valores documentados en
+    expected_results.json.
+
+    Valida:
+        - Campo n (cantidad de observaciones)
+        - Grupo independencia: veredicto resuelto, jerarquía, Anderson, WW
+        - Grupo homogeneidad: Helmert, t-Student, Cramer (veredictos)
+        - Grupo tendencia: Mann-Kendall, Kolmogorov-Smirnov
+        - Grupo outliers: Chow (estadístico y veredicto)
+
+    Note:
+        Esta serie es parte de la validación cruzada contra la tesis.
+        Cualquier discrepancia indica regresión en el código.
+    """
     fixtures_path = Path(__file__).parent.parent / "fixtures"
 
     with (fixtures_path / "expected_results.json").open() as f:
@@ -94,8 +130,19 @@ def test_series_referencia_1():
 
 
 def test_series_referencia_2():
-    """Prueba completa contra serie referencia 2"""
-    """todos los resultados deben coincidir exactamente"""
+    """Test de regresión completo contra serie de referencia 2 (n=50).
+
+    Similar a test_series_referencia_1 pero con la segunda serie de
+    referencia documentada. Usa los primeros 50 valores del CSV.
+
+    Esta serie tiene características diferentes (posiblemente más
+    valores atípicos o tendencia) que permiten verificar el pipeline
+    en condiciones distintas.
+
+    Valida:
+        - Mismos campos que test_series_referencia_1
+        - Tolerancia idéntica (STATISTIC_COMPARISON_TOLERANCE)
+    """
     fixtures_path = Path(__file__).parent.parent / "fixtures"
 
     with (fixtures_path / "expected_results.json").open() as f:

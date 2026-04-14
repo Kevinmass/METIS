@@ -1,9 +1,55 @@
+/**
+ * Aplicación React METIS - Interfaz de Validación Hidrológica
+ *
+ * Este módulo implementa la UI completa para el sistema METIS, permitiendo:
+ *   - Ingesta manual de series numéricas
+ *   - Carga de archivos CSV y Excel vía drag & drop
+ *   - Visualización de advertencias de valores problemáticos
+ *   - Ejecución de análisis de validación estadística
+ *   - Visualización de resultados en modo semáforo
+ *   - Gráficos de dispersión temporal y correlograma
+ *
+ * Arquitectura de componentes:
+ *   - Funciones helper (parseCsv, parseExcel, computeAutoCorrelation)
+ *   - Componente App (estado global, handlers de eventos)
+ *   - Sub-secciones JSX: Ingesta, Resumen, Visualizaciones, Resultados
+ *
+ * Integración con API:
+ *   - POST /validate: Envío de serie como JSON
+ *   - Respuesta: ValidationResponse con resultados de 4 grupos de pruebas
+ *
+ * Estado principal:
+ *   - series: Array de valores numéricos
+ *   - seriesId: Identificador para trazabilidad
+ *   - analysis: Resultado completo de la API
+ *   - warnings: Advertencias de validación previa
+ *   - isSending: Estado de loading durante análisis
+ *
+ * @module App
+ */
+
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 
+// =============================================================================
+// CONSTANTES DE CONFIGURACIÓN
+// =============================================================================
+
+/** URL base de la API METIS */
 const API_BASE = "http://127.0.0.1:8000";
+
+/** Máximo lag para cálculo de autocorrelación (correlograma) */
 const MAX_LAG = 10;
 
+// =============================================================================
+// FUNCIONES DE UTILIDAD - MAPEO DE VEREDICTOS
+// =============================================================================
+
+/**
+ * Convierte veredicto API a clase CSS para estilizado.
+ * @param {string} verdict - "ACCEPTED", "REJECTED", o "INCONCLUSIVE"
+ * @returns {string} Clase CSS correspondiente
+ */
 const verdictLabel = (verdict) => {
   switch (verdict) {
     case "ACCEPTED":
@@ -15,12 +61,18 @@ const verdictLabel = (verdict) => {
   }
 };
 
+/**
+ * Traduce veredicto API a texto en español.
+ * @param {string} verdict - Veredicto de la API
+ * @returns {string} Texto localizado
+ */
 const statusText = (verdict) => {
   if (verdict === "ACCEPTED") return "Aceptado";
   if (verdict === "REJECTED") return "Rechazado";
   return "Inconcluso";
 };
 
+/** Explicaciones de condiciones para panel informativo */
 const explanations = {
   independence:
     "Para independencia se evalúa el comportamiento serial. Anderson domina y Wald-Wolfowitz valida la consistencia.",
@@ -32,6 +84,16 @@ const explanations = {
     "El test de Chow identifica puntos sospechosos de ruptura o atípicos en la serie.",
 };
 
+// =============================================================================
+// FUNCIONES DE PARSING - INGESTA DE DATOS
+// =============================================================================
+
+/**
+ * Parsea contenido CSV extrayendo la columna de valores numéricos.
+ *
+ * @param {string} text - Contenido del archivo CSV
+ * @returns {number[]} Array de valores numéricos (segunda columna)
+ */
 function parseCsv(text) {
   const lines = text
     .trim()
@@ -44,6 +106,12 @@ function parseCsv(text) {
     .map((value) => Number(value));
 }
 
+/**
+ * Parsea buffer de archivo Excel extrayendo todos los valores numéricos.
+ *
+ * @param {ArrayBuffer} buffer - Buffer del archivo Excel
+ * @returns {number[]} Array de valores numéricos
+ */
 function parseExcel(buffer) {
   const workbook = XLSX.read(buffer, { type: "array" });
   const sheetName = workbook.SheetNames[0];
@@ -55,6 +123,19 @@ function parseExcel(buffer) {
     .map((value) => Number(value));
 }
 
+// =============================================================================
+// FUNCIONES DE VALIDACIÓN Y CÁLCULO
+// =============================================================================
+
+/**
+ * Construye lista de advertencias para valores problemáticos.
+ *
+ * Detecta valores <= 0 (cero o negativos) que son físicamente
+ * inválidos para caudales y generan advertencia previa.
+ *
+ * @param {number[]} series - Serie de valores
+ * @returns {Array<{code, message, affected_indices}>} Lista de advertencias
+ */
 function buildWarnings(series) {
   const warnings = [];
   const indices = series
@@ -71,6 +152,15 @@ function buildWarnings(series) {
   return warnings;
 }
 
+/**
+ * Calcula autocorrelación de la serie para el correlograma.
+ *
+ * Implementa el cálculo de autocorrelación con desfasajes (lags)
+ * hasta MAX_LAG para visualización del correlograma.
+ *
+ * @param {number[]} series - Serie de valores (filtrada de no finitos)
+ * @returns {Array<{lag, value}>} Array de coeficientes de autocorrelación
+ */
 function computeAutoCorrelation(series) {
   const n = series.length;
   if (n < 2) {
@@ -93,11 +183,36 @@ function computeAutoCorrelation(series) {
   });
 }
 
+/**
+ * Convierte serie a formato CSV para exportación.
+ * @param {number[]} series - Serie de valores
+ * @returns {string} Contenido CSV (un valor por línea)
+ */
 function serieToCsv(series) {
   return series.map((value) => value.toString()).join("\n");
 }
 
+// =============================================================================
+// COMPONENTE PRINCIPAL APP
+// =============================================================================
+
+/**
+ * Componente principal de la aplicación METIS.
+ *
+ * Gestiona el estado global de la serie, la comunicación con la API,
+ * y el renderizado de las 4 secciones de la UI:
+ *   1. Ingesta de datos (manual y archivos)
+ *   2. Resumen de la serie (warnings, identificador)
+ *   3. Visualizaciones (dispersión, correlograma)
+ *   4. Resultados de validación (dashboard semáforo)
+ *
+ * @returns {JSX.Element} Aplicación React completa
+ */
 export default function App() {
+  // ---------------------------------------------------------------------------
+  // ESTADO GLOBAL
+  // ---------------------------------------------------------------------------
+
   const [series, setSeries] = useState([0, 0, 0]);
   const [seriesId, setSeriesId] = useState("serie_local");
   const [fetchError, setFetchError] = useState("");
@@ -106,25 +221,52 @@ export default function App() {
   const [isSending, setIsSending] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
+  // ---------------------------------------------------------------------------
+  // MEMOIZACIÓN DE CÁLCULOS
+  // ---------------------------------------------------------------------------
+
+  /** Advertencias calculadas de la serie actual */
   const warnings = useMemo(() => buildWarnings(series), [series]);
+
+  /** Validación de serie: mínimo 3 valores numéricos */
   const seriesValid = series.length >= 3 && series.every((value) => !Number.isNaN(value));
 
+  /** Coeficientes de autocorrelación para correlograma */
   const autoCorrelation = useMemo(
     () => computeAutoCorrelation(series.filter((value) => Number.isFinite(value))),
     [series]
   );
 
+  /** Banda de confianza 95% para correlograma */
   const band = series.length > 0 ? 1.96 / Math.sqrt(series.length) : 0;
 
+  // ---------------------------------------------------------------------------
+  // HANDLERS DE MODIFICACIÓN DE SERIE
+  // ---------------------------------------------------------------------------
+
+  /** Actualiza valor en índice específico */
   const updateByIndex = (index, value) => {
     const next = [...series];
     next[index] = value;
     setSeries(next);
   };
 
+  /** Agrega fila con valor 0 al final */
   const addRow = () => setSeries((prev) => [...prev, 0]);
+
+  /** Elimina fila en índice específico */
   const removeRow = (index) => setSeries((prev) => prev.filter((_, i) => i !== index));
 
+  // ---------------------------------------------------------------------------
+  // HANDLERS DE API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ejecuta análisis enviando serie a la API.
+   *
+   * POST /validate con body { series, series_id }
+   * Almacena respuesta en estado 'analysis' o error en 'fetchError'
+   */
   const handleSubmit = async () => {
     setFetchError("");
     if (!seriesValid) {
@@ -157,6 +299,14 @@ export default function App() {
     }
   };
 
+  /**
+   * Procesa archivo CSV o Excel cargado.
+   *
+   * Detecta formato por extensión, parsea contenido y actualiza
+   * estados 'series' y 'seriesId'.
+   *
+   * @param {File} file - Archivo seleccionado vía input o drag-drop
+   */
   const handleFile = async (file) => {
     setFileError("");
     setFetchError("");
@@ -195,6 +345,10 @@ export default function App() {
 
     setFileError("Formato de archivo no compatible.");
   };
+
+  // ---------------------------------------------------------------------------
+  // RENDERIZADO
+  // ---------------------------------------------------------------------------
 
   const displayValue = (value) => {
     return Number.isFinite(value) ? value : 0;

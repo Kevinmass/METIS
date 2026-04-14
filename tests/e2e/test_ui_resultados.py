@@ -1,8 +1,34 @@
+"""Tests E2E para visualización de resultados de validación.
+
+Este módulo prueba la sección de resultados de la UI, verificando:
+    - Renderizado del dashboard de resultados (modo semáforo)
+    - Ausencia de errores en la UI
+    - Visualización de gráficos detallados
+    - Controles de la interfaz de resultados
+
+Requiere:
+    - API y frontend corriendo
+    - Serie de referencia 1 disponible en fixtures
+"""
+
 from playwright.sync_api import Page, expect
 
 
 def test_ui_resultados(page: Page):
-    """Test resultados completos del análisis."""
+    """Test renderizado completo de sección de resultados.
+
+    Escenario:
+        1. Usuario carga serie de referencia 1
+        2. Ejecuta análisis
+        3. Espera que termine el procesamiento
+        4. Sistema muestra resultados estructurados
+
+    Valida:
+        - 4 indicadores de estado renderizados (condiciones de validación)
+        - Sin banners de error visibles
+        - Sección "3. Resultados de validación" visible
+        - Botón "Ejecutar análisis" habilitado nuevamente
+    """
     page.goto("http://localhost:5173")
 
     # Ocultar input file
@@ -29,7 +55,17 @@ def test_ui_resultados(page: Page):
 
 
 def test_ui_graficos_detalle(page: Page):
-    """Test gráficos con datos reales."""
+    """Test visualización detallada de gráficos de resultados.
+
+    Escenario:
+        1. Usuario carga serie de referencia
+        2. Gráficos se renderizan con datos reales
+
+    Valida:
+        - Elemento SVG de gráfico visible
+        - Círculos renderizados para cada punto de dato (36)
+        - Texto "Banda 95%" visible en correlograma
+    """
     page.goto("http://localhost:5173")
 
     # Ocultar input file
