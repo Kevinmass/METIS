@@ -334,7 +334,7 @@ class TestLogPearsonIIIFitting:
         """Test de que Log-Pearson III falla con valores negativos."""
         series = pd.Series([-1.0, -2.0, -3.0])
 
-        with pytest.raises(ValueError, match="negative"):
+        with pytest.raises(ValueError, match="positive"):
             fit_distribution(series, "Log-Pearson III", estimation_method="MOM")
 
 
