@@ -24,13 +24,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
-from fastapi.testclient import TestClient
 
-from api.main import app
-
-
-# Cliente de test para la aplicación FastAPI
-client = TestClient(app)
 
 # Ruta a fixtures de prueba
 FIXTURES_PATH = Path(__file__).parent.parent / "fixtures"
@@ -142,7 +136,7 @@ def assert_response_matches_expected(
     )
 
 
-def test_validate_reference_series_1_returns_expected_report():
+def test_validate_reference_series_1_returns_expected_report(client):
     """Test de regresión: serie de referencia 1 vía endpoint JSON.
 
     Carga la serie de referencia 1 desde fixture y la envía al endpoint
@@ -163,7 +157,7 @@ def test_validate_reference_series_1_returns_expected_report():
     )
 
 
-def test_validate_reference_series_2_returns_expected_report():
+def test_validate_reference_series_2_returns_expected_report(client):
     """Test de regresión: serie de referencia 2 vía endpoint JSON.
 
     Similar al test de referencia 1 pero con la segunda serie documentada.
@@ -182,7 +176,7 @@ def test_validate_reference_series_2_returns_expected_report():
     )
 
 
-def test_validate_empty_series_returns_400():
+def test_validate_empty_series_returns_400(client):
     """Test manejo de error: serie vacía debe retornar HTTP 400.
 
     Verifica que el endpoint rechace series sin datos con error 400
@@ -193,7 +187,7 @@ def test_validate_empty_series_returns_400():
     assert response.status_code == HTTP_BAD_REQUEST
 
 
-def test_validate_non_numeric_series_returns_422():
+def test_validate_non_numeric_series_returns_422(client):
     """Test manejo de error: datos no numéricos deben retornar HTTP 422.
 
     Verifica que Pydantic/FastAPI validen el tipo de datos y rechacen
@@ -204,7 +198,7 @@ def test_validate_non_numeric_series_returns_422():
     assert response.status_code == HTTP_UNPROCESSABLE_ENTITY
 
 
-def test_validate_series_with_zero_returns_warning_and_analysis():
+def test_validate_series_with_zero_returns_warning_and_analysis(client):
     """Test de principio de diseño: detectar y advertir, no bloquear.
 
     Verifica que una serie con valores cero:
@@ -223,7 +217,7 @@ def test_validate_series_with_zero_returns_warning_and_analysis():
     assert "validation" in response.json()
 
 
-def test_validate_file_csv_returns_same_result_as_json_endpoint():
+def test_validate_file_csv_returns_same_result_as_json_endpoint(client):
     """Test equivalencia: /validate/file CSV vs /validate JSON.
 
     Verifica que el endpoint de archivo CSV produzca exactamente los
@@ -250,7 +244,7 @@ def test_validate_file_csv_returns_same_result_as_json_endpoint():
     )
 
 
-def test_validate_file_xlsx_returns_same_result_as_json_endpoint():
+def test_validate_file_xlsx_returns_same_result_as_json_endpoint(client):
     """Test equivalencia: /validate/file Excel vs /validate JSON.
 
     Verifica que el endpoint de archivo Excel (.xlsx) produzca los

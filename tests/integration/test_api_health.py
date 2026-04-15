@@ -11,19 +11,12 @@ Nota:
     corriendo. La aplicación se instancia directamente en cada test.
 """
 
-from fastapi.testclient import TestClient
-
-from api.main import app
-
-
-# Cliente de test para la aplicación FastAPI
-client = TestClient(app)
 
 # Constantes HTTP
 HTTP_OK = 200
 
 
-def test_health_returns_ok_status():
+def test_health_returns_ok_status(client):
     """Verifica que /health retorna estado operativo.
 
     Valida:

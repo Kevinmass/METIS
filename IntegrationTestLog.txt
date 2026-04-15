@@ -1,0 +1,9 @@
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> python -m pytest tests\integration -q
+..................................                                                                               [100%]
+================================================== warnings summary ===================================================
+..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\formparsers.py:10
+  C:\Users\kevin\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\formparsers.py:10: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+34 passed, 1 warning in 0.97s

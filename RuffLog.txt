@@ -1,0 +1,682 @@
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> ruff check --fix
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+  --> tests\integration\test_api_frequency.py:21:40
+   |
+19 |         response = client.post("/frequency/fit", json=request)
+20 |
+21 |         assert response.status_code == 200
+   |                                        ^^^
+22 |         data = response.json()
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `8` with a constant variable
+  --> tests\integration\test_api_frequency.py:25:29
+   |
+24 |         assert "n" in data
+25 |         assert data["n"] == 8
+   |                             ^
+26 |         assert "estimation_method" in data
+27 |         assert data["estimation_method"] == "MOM"
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+  --> tests\integration\test_api_frequency.py:42:40
+   |
+40 |         response = client.post("/frequency/fit", json=request)
+41 |
+42 |         assert response.status_code == 200
+   |                                        ^^^
+43 |         data = response.json()
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `2` with a constant variable
+  --> tests\integration\test_api_frequency.py:45:46
+   |
+43 |         data = response.json()
+44 |
+45 |         assert len(data["distributions"]) <= 2
+   |                                              ^
+46 |         dist_names = [d["distribution_name"] for d in data["distributions"]]
+47 |         assert all(name in ["Normal", "Gumbel"] for name in dist_names)
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `400` with a constant variable
+  --> tests\integration\test_api_frequency.py:58:40
+   |
+56 |         response = client.post("/frequency/fit", json=request)
+57 |
+58 |         assert response.status_code == 400
+   |                                        ^^^
+59 |         assert "at least" in response.json()["detail"].lower()
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `400` with a constant variable
+  --> tests\integration\test_api_frequency.py:70:40
+   |
+68 |         response = client.post("/frequency/fit", json=request)
+69 |
+70 |         assert response.status_code == 400
+   |                                        ^^^
+71 |         assert "at least" in response.json()["detail"].lower()
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `422` with a constant variable
+  --> tests\integration\test_api_frequency.py:83:40
+   |
+82 |         # La API debería rechazar datos no numéricos con 422
+83 |         assert response.status_code == 422
+   |                                        ^^^
+84 |
+85 |     def test_frequency_fit_distribution_schema(self, client):
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+  --> tests\integration\test_api_frequency.py:94:40
+   |
+92 |         response = client.post("/frequency/fit", json=request)
+93 |
+94 |         assert response.status_code == 200
+   |                                        ^^^
+95 |         data = response.json()
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:124:40
+    |
+122 |         response = client.post("/frequency/fit", json=request)
+123 |
+124 |         assert response.status_code == 200
+    |                                        ^^^
+125 |         data = response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:138:40
+    |
+136 |         response = client.post("/frequency/fit", json=request)
+137 |
+138 |         assert response.status_code == 200
+    |                                        ^^^
+139 |         data = response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `422` with a constant variable
+   --> tests\integration\test_api_frequency.py:153:40
+    |
+152 |         # Debería dar error de validación de Pydantic
+153 |         assert response.status_code == 422
+    |                                        ^^^
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:169:40
+    |
+167 |         response = client.post("/frequency/design-event", json=request)
+168 |
+169 |         assert response.status_code == 200
+    |                                        ^^^
+170 |         data = response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `100.0` with a constant variable
+   --> tests\integration\test_api_frequency.py:173:41
+    |
+172 |         assert "return_period" in data
+173 |         assert data["return_period"] == 100.0
+    |                                         ^^^^^
+174 |         assert "annual_probability" in data
+175 |         assert data["annual_probability"] == 0.99
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.99` with a constant variable
+   --> tests\integration\test_api_frequency.py:175:46
+    |
+173 |         assert data["return_period"] == 100.0
+174 |         assert "annual_probability" in data
+175 |         assert data["annual_probability"] == 0.99
+    |                                              ^^^^
+176 |         assert "design_value" in data
+177 |         assert "distribution_name" in data
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:190:40
+    |
+188 |         response = client.post("/frequency/design-event", json=request)
+189 |
+190 |         assert response.status_code == 200
+    |                                        ^^^
+191 |         data = response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `50.0` with a constant variable
+   --> tests\integration\test_api_frequency.py:193:41
+    |
+191 |         data = response.json()
+192 |
+193 |         assert data["return_period"] == 50.0
+    |                                         ^^^^
+194 |         assert data["annual_probability"] == 0.98
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.98` with a constant variable
+   --> tests\integration\test_api_frequency.py:194:46
+    |
+193 |         assert data["return_period"] == 50.0
+194 |         assert data["annual_probability"] == 0.98
+    |                                              ^^^^
+195 |
+196 |     def test_design_event_invalid_return_period(self, client):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `400` with a constant variable
+   --> tests\integration\test_api_frequency.py:206:40
+    |
+204 |         response = client.post("/frequency/design-event", json=request)
+205 |
+206 |         assert response.status_code == 400
+    |                                        ^^^
+207 |         assert "positive" in response.json()["detail"].lower()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `400` with a constant variable
+   --> tests\integration\test_api_frequency.py:219:40
+    |
+217 |         response = client.post("/frequency/design-event", json=request)
+218 |
+219 |         assert response.status_code == 400
+    |                                        ^^^
+220 |
+221 |     def test_design_event_invalid_distribution(self, client):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `422` with a constant variable
+   --> tests\integration\test_api_frequency.py:231:40
+    |
+229 |         response = client.post("/frequency/design-event", json=request)
+230 |
+231 |         assert response.status_code == 422
+    |                                        ^^^
+232 |         assert "not found" in response.json()["detail"].lower()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:244:40
+    |
+242 |         response = client.post("/frequency/design-event", json=request)
+243 |
+244 |         assert response.status_code == 200
+    |                                        ^^^
+245 |         data = response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:260:40
+    |
+258 |         response = client.post("/frequency/design-event", json=request)
+259 |
+260 |         assert response.status_code == 200
+    |                                        ^^^
+261 |         data = response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:278:44
+    |
+277 |         fit_response = client.post("/frequency/fit", json=fit_request)
+278 |         assert fit_response.status_code == 200
+    |                                            ^^^
+279 |         fit_data = fit_response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:293:47
+    |
+292 |         design_response = client.post("/frequency/design-event", json=design_request)
+293 |         assert design_response.status_code == 200
+    |                                               ^^^
+294 |         design_data = design_response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `100.0` with a constant variable
+   --> tests\integration\test_api_frequency.py:296:48
+    |
+294 |         design_data = design_response.json()
+295 |
+296 |         assert design_data["return_period"] == 100.0
+    |                                                ^^^^^
+297 |         assert design_data["design_value"] > 0
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:325:51
+    |
+323 |                 "/frequency/design-event", json=design_request
+324 |             )
+325 |             assert design_response.status_code == 200
+    |                                                   ^^^
+326 |             design_data = design_response.json()
+327 |             design_values.append(design_data["design_value"])
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `422` with a constant variable
+   --> tests\integration\test_api_frequency.py:345:40
+    |
+343 |         response = client.post("/frequency/fit", json=request)
+344 |
+345 |         assert response.status_code == 422
+    |                                        ^^^
+346 |
+347 |     def test_invalid_json(self, client):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `422` with a constant variable
+   --> tests\integration\test_api_frequency.py:355:40
+    |
+353 |         )
+354 |
+355 |         assert response.status_code == 422
+    |                                        ^^^
+356 |
+357 |     def test_design_event_missing_parameters(self, client):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `422` with a constant variable
+   --> tests\integration\test_api_frequency.py:367:40
+    |
+365 |         response = client.post("/frequency/design-event", json=request)
+366 |
+367 |         assert response.status_code == 422
+    |                                        ^^^
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:382:40
+    |
+380 |         response = client.post("/frequency/fit", json=request)
+381 |
+382 |         assert response.status_code == 200
+    |                                        ^^^
+383 |         # Si la respuesta es válida, el JSON ya fue parseado correctamente
+384 |         data = response.json()
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:397:40
+    |
+395 |         response = client.post("/frequency/design-event", json=request)
+396 |
+397 |         assert response.status_code == 200
+    |                                        ^^^
+398 |         data = response.json()
+399 |         assert isinstance(data, dict)
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `200` with a constant variable
+   --> tests\integration\test_api_frequency.py:410:40
+    |
+408 |         response = client.post("/frequency/fit", json=request)
+409 |
+410 |         assert response.status_code == 200
+    |                                        ^^^
+411 |         assert "application/json" in response.headers["content-type"]
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `100.0` with a constant variable
+  --> tests\unit\test_design_events.py:46:39
+   |
+44 |         event = calculate_design_event(fit_result, return_period=100.0)
+45 |
+46 |         assert event.return_period == 100.0
+   |                                       ^^^^^
+47 |         assert event.annual_probability == 0.99
+48 |         assert event.design_value > 100.0  # Debe ser mayor que la media
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.99` with a constant variable
+  --> tests\unit\test_design_events.py:47:44
+   |
+46 |         assert event.return_period == 100.0
+47 |         assert event.annual_probability == 0.99
+   |                                            ^^^^
+48 |         assert event.design_value > 100.0  # Debe ser mayor que la media
+49 |         assert event.distribution_name == "Normal"
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `100.0` with a constant variable
+  --> tests\unit\test_design_events.py:48:37
+   |
+46 |         assert event.return_period == 100.0
+47 |         assert event.annual_probability == 0.99
+48 |         assert event.design_value > 100.0  # Debe ser mayor que la media
+   |                                     ^^^^^
+49 |         assert event.distribution_name == "Normal"
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `50.0` with a constant variable
+  --> tests\unit\test_design_events.py:74:39
+   |
+72 |         event = calculate_design_event(fit_result, return_period=50.0)
+73 |
+74 |         assert event.return_period == 50.0
+   |                                       ^^^^
+75 |         assert event.annual_probability == 0.98
+76 |         # Para T=50, el valor debe ser menor que para T=100
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.98` with a constant variable
+  --> tests\unit\test_design_events.py:75:44
+   |
+74 |         assert event.return_period == 50.0
+75 |         assert event.annual_probability == 0.98
+   |                                            ^^^^
+76 |         # Para T=50, el valor debe ser menor que para T=100
+77 |         event_100 = calculate_design_event(fit_result, return_period=100.0)
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `2.0` with a constant variable
+   --> tests\unit\test_design_events.py:130:39
+    |
+128 |         event = calculate_design_event(fit_result, return_period=2.0)
+129 |
+130 |         assert event.return_period == 2.0
+    |                                       ^^^
+131 |         assert event.annual_probability == 0.5
+132 |         # Para distribución normal, T=2 debe dar la mediana ≈ media
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.5` with a constant variable
+   --> tests\unit\test_design_events.py:131:44
+    |
+130 |         assert event.return_period == 2.0
+131 |         assert event.annual_probability == 0.5
+    |                                            ^^^
+132 |         # Para distribución normal, T=2 debe dar la mediana ≈ media
+133 |         assert abs(event.design_value - 100.0) < 1.0
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `3` with a constant variable
+   --> tests\unit\test_design_events.py:197:31
+    |
+196 |         # Debe ignorar los valores inválidos
+197 |         assert len(events) == 3
+    |                               ^
+198 |         assert all(e.return_period > 0 for e in events)
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `2` with a constant variable
+   --> tests\unit\test_design_events.py:210:16
+    |
+208 |         assert isinstance(periods, list)
+209 |         assert len(periods) > 0
+210 |         assert 2 in periods
+    |                ^
+211 |         assert 5 in periods
+212 |         assert 10 in periods
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `5` with a constant variable
+   --> tests\unit\test_design_events.py:211:16
+    |
+209 |         assert len(periods) > 0
+210 |         assert 2 in periods
+211 |         assert 5 in periods
+    |                ^
+212 |         assert 10 in periods
+213 |         assert 50 in periods
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `10` with a constant variable
+   --> tests\unit\test_design_events.py:212:16
+    |
+210 |         assert 2 in periods
+211 |         assert 5 in periods
+212 |         assert 10 in periods
+    |                ^^
+213 |         assert 50 in periods
+214 |         assert 100 in periods
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `50` with a constant variable
+   --> tests\unit\test_design_events.py:213:16
+    |
+211 |         assert 5 in periods
+212 |         assert 10 in periods
+213 |         assert 50 in periods
+    |                ^^
+214 |         assert 100 in periods
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `100` with a constant variable
+   --> tests\unit\test_design_events.py:214:16
+    |
+212 |         assert 10 in periods
+213 |         assert 50 in periods
+214 |         assert 100 in periods
+    |                ^^^
+215 |
+216 |     def test_standard_return_periods_sorted(self):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.1` with a constant variable
+   --> tests\unit\test_design_events.py:249:33
+    |
+247 |         # Valor muy alto debe tener baja probabilidad de excedencia
+248 |         prob_high = calculate_exceedance_probability(fit_result, 200.0)
+249 |         assert 0 <= prob_high < 0.1
+    |                                 ^^^
+250 |
+251 |         # Valor cerca de la media debe tener ~50% de probabilidad de excedencia
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.4` with a constant variable
+   --> tests\unit\test_design_events.py:253:16
+    |
+251 |         # Valor cerca de la media debe tener ~50% de probabilidad de excedencia
+252 |         prob_median = calculate_exceedance_probability(fit_result, 100.0)
+253 |         assert 0.4 <= prob_median <= 0.6
+    |                ^^^
+254 |
+255 |         # Valor muy bajo debe tener alta probabilidad de excedencia
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.6` with a constant variable
+   --> tests\unit\test_design_events.py:253:38
+    |
+251 |         # Valor cerca de la media debe tener ~50% de probabilidad de excedencia
+252 |         prob_median = calculate_exceedance_probability(fit_result, 100.0)
+253 |         assert 0.4 <= prob_median <= 0.6
+    |                                      ^^^
+254 |
+255 |         # Valor muy bajo debe tener alta probabilidad de excedencia
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.8` with a constant variable
+   --> tests\unit\test_design_events.py:257:27
+    |
+255 |         # Valor muy bajo debe tener alta probabilidad de excedencia
+256 |         prob_low = calculate_exceedance_probability(fit_result, 50.0)
+257 |         assert prob_low > 0.8
+    |                           ^^^
+258 |
+259 |     def test_calculate_exceedance_probability_bounds(self):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `10` with a constant variable
+   --> tests\unit\test_design_events.py:311:26
+    |
+309 |         # Valor alto debe dar período de retorno grande
+310 |         rp_high = calculate_return_period_from_value(fit_result, 200.0)
+311 |         assert rp_high > 10
+    |                          ^^
+312 |
+313 |         # Valor cerca de la media debe dar T ≈ 2
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `1.5` with a constant variable
+   --> tests\unit\test_design_events.py:315:16
+    |
+313 |         # Valor cerca de la media debe dar T ≈ 2
+314 |         rp_median = calculate_return_period_from_value(fit_result, 100.0)
+315 |         assert 1.5 <= rp_median <= 2.5
+    |                ^^^
+316 |
+317 |     def test_calculate_return_period_from_value_extreme(self):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `2.5` with a constant variable
+   --> tests\unit\test_design_events.py:315:36
+    |
+313 |         # Valor cerca de la media debe dar T ≈ 2
+314 |         rp_median = calculate_return_period_from_value(fit_result, 100.0)
+315 |         assert 1.5 <= rp_median <= 2.5
+    |                                    ^^^
+316 |
+317 |     def test_calculate_return_period_from_value_extreme(self):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.001` with a constant variable
+   --> tests\unit\test_design_events.py:405:46
+    |
+404 |         # La probabilidad de excedencia debe ser 1/T = 0.01
+405 |         assert abs(exceedance_prob - 0.01) < 0.001
+    |                                              ^^^^^
+406 |
+407 |     def test_design_event_return_period_consistency(self):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `1e-10` with a constant variable
+   --> tests\unit\test_design_events.py:492:68
+    |
+490 |             event = calculate_design_event(fit_result, return_period=return_period)
+491 |             expected_prob = 1.0 - 1.0 / return_period
+492 |             assert abs(event.annual_probability - expected_prob) < 1e-10
+    |                                                                    ^^^^^
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.1` with a constant variable
+  --> tests\unit\test_distributions.py:41:42
+   |
+39 |         assert "mu" in params
+40 |         assert "sigma" in params
+41 |         assert abs(params["mu"] - 3.0) < 0.1  # Media aproximada
+   |                                          ^^^
+42 |         assert params["sigma"] > 0
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.01` with a constant variable
+  --> tests\unit\test_distributions.py:51:38
+   |
+49 |         # CDF en la media debe ser ~0.5
+50 |         cdf_mean = dist.cdf(0.0, params)
+51 |         assert abs(cdf_mean - 0.5) < 0.01
+   |                                      ^^^^
+52 |
+53 |         # CDF en -inf debe ser ~0
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.01` with a constant variable
+  --> tests\unit\test_distributions.py:55:26
+   |
+53 |         # CDF en -inf debe ser ~0
+54 |         cdf_neg = dist.cdf(-10.0, params)
+55 |         assert cdf_neg < 0.01
+   |                          ^^^^
+56 |
+57 |         # CDF en +inf debe ser ~1
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.99` with a constant variable
+  --> tests\unit\test_distributions.py:59:26
+   |
+57 |         # CDF en +inf debe ser ~1
+58 |         cdf_pos = dist.cdf(10.0, params)
+59 |         assert cdf_pos > 0.99
+   |                          ^^^^
+60 |
+61 |     def test_ppf_normal(self):
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.01` with a constant variable
+  --> tests\unit\test_distributions.py:68:40
+   |
+66 |         # PPF de 0.5 debe ser la media
+67 |         ppf_median = dist.ppf(0.5, params)
+68 |         assert abs(ppf_median - 0.0) < 0.01
+   |                                        ^^^^
+69 |
+70 |         # Consistencia: ppf(cdf(x)) ≈ x
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.01` with a constant variable
+  --> tests\unit\test_distributions.py:74:35
+   |
+72 |         cdf_x = dist.cdf(x, params)
+73 |         ppf_cdf = dist.ppf(cdf_x, params)
+74 |         assert abs(ppf_cdf - x) < 0.01
+   |                                   ^^^^
+75 |
+76 |     def test_pdf_normal(self):
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.01` with a constant variable
+   --> tests\unit\test_distributions.py:188:33
+    |
+186 |         # Con gamma=0, debe comportarse como normal
+187 |         cdf = dist.cdf(0.0, params)
+188 |         assert abs(cdf - 0.5) < 0.01
+    |                                 ^^^^
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.01` with a constant variable
+   --> tests\unit\test_distributions.py:378:39
+    |
+376 |             cdf_x = dist.cdf(x, params)
+377 |             ppf_cdf = dist.ppf(cdf_x, params)
+378 |             assert abs(ppf_cdf - x) < 0.01, f"Failed for {x} in {dist_class.__name__}"
+    |                                       ^^^^
+379 |
+380 |     @pytest.mark.parametrize(
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `0.1` with a constant variable
+  --> tests\unit\test_fitting.py:38:42
+   |
+36 |         assert "mu" in params
+37 |         assert "sigma" in params
+38 |         assert abs(params["mu"] - 3.0) < 0.1
+   |                                          ^^^
+39 |         assert params["sigma"] > 0
+   |
+
+PLR2004 Magic value used in comparison, consider replacing `0.3` with a constant variable
+   --> tests\unit\test_fitting.py:142:26
+    |
+141 |         # Debe aceptar con alta probabilidad
+142 |         assert ks_stat < 0.3  # Estadístico debe ser pequeño
+    |                          ^^^
+143 |
+144 |     def test_ks_test_poor_fit(self):
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `2` with a constant variable
+   --> tests\unit\test_fitting.py:266:32
+    |
+264 |         )
+265 |
+266 |         assert len(results) <= 2
+    |                                ^
+267 |         assert all(r.distribution_name in dist_names for r in results)
+    |
+
+PLR2004 Magic value used in comparison, consider replacing `2` with a constant variable
+   --> tests\unit\test_fitting.py:367:34
+    |
+365 |             ]
+366 |         )
+367 |         assert accepted_count == 2
+    |                                  ^
+368 |
+369 |     def test_recommendation_one_accepted(self):
+    |
+Found 66 errors.

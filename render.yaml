@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: metis-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10
+
+  - type: site
+    name: metis-frontend
+    runtime: node
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    publishPath: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://metis-backend.onrender.com

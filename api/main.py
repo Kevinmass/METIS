@@ -23,11 +23,49 @@ Ejecución local:
     uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 """
 
+import json
+import math
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import JSONResponse
 
-from api.routers import validate
+from api.routers import frequency, validate
 from api.schemas.validation import HealthResponse
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles infinity and NaN values.
+
+    Replaces:
+        - inf with 1e10
+        - -inf with -1e10
+        - nan with None
+    """
+
+    def default(self, obj):
+        """Encode object, handling special float values."""
+        if isinstance(obj, float):
+            if math.isinf(obj):
+                return 1e10 if obj > 0 else -1e10
+            if math.isnan(obj):
+                return None
+        return super().default(obj)
+
+
+# Custom JSON response class
+class CustomJSONResponse(JSONResponse):
+    """JSON response that uses CustomJSONEncoder."""
+
+    def render(self, content) -> bytes:
+        """Render content using CustomJSONEncoder."""
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            cls=CustomJSONEncoder,
+        ).encode("utf-8")
 
 
 # Configuración de la aplicación FastAPI
@@ -49,13 +87,18 @@ app = FastAPI(
     license_info={
         "name": "Proyecto Académico - UCC",
     },
+    default_response_class=CustomJSONResponse,
 )
 
-# Configuración CORS - Permitir acceso desde cualquier origen
-# Requerido para integración con frontend en desarrollo
+# Configuración CORS - Permitir acceso desde orígenes configurados
+# Usar variable de entorno FRONTEND_URL o permitir todos para prototipo
+allowed_origins = os.getenv("FRONTEND_URL", "*")
+if allowed_origins != "*":
+    allowed_origins = [origin.strip() for origin in allowed_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins if isinstance(allowed_origins, list) else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,6 +106,7 @@ app.add_middleware(
 
 # Inclusión de routers
 app.include_router(validate.router, prefix="", tags=["validate"])
+app.include_router(frequency.router, prefix="/frequency", tags=["frequency"])
 
 
 @app.get(

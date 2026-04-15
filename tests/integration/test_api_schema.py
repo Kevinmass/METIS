@@ -15,19 +15,12 @@ Importancia:
     lo cual puede romper compatibilidad con el frontend o GeoAI.
 """
 
-from fastapi.testclient import TestClient
-
-from api.main import app
-
-
-# Cliente de test para la aplicación FastAPI
-client = TestClient(app)
 
 # Constantes HTTP
 HTTP_OK = 200
 
 
-def test_validate_response_contains_required_schema_fields():
+def test_validate_response_contains_required_schema_fields(client):
     """Verifica que la respuesta contenga todos los campos raíz requeridos.
 
     Valida presencia de:
@@ -52,7 +45,7 @@ def test_validate_response_contains_required_schema_fields():
     assert "outliers" in payload["validation"]
 
 
-def test_each_test_result_contains_required_fields():
+def test_each_test_result_contains_required_fields(client):
     """Verifica que cada resultado individual tenga los campos obligatorios.
 
     Itera sobre los 8 resultados individuales (2 independencia + 3 homogeneidad +

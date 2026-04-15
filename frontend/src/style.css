@@ -81,6 +81,35 @@ button {
   opacity: 0.85;
 }
 
+.tab-navigation {
+  display: flex;
+  gap: 8px;
+  background: #0f1a2f;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid #1f2e47;
+}
+
+.tab-button {
+  border: none;
+  color: #94a3b8;
+  background: transparent;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.tab-button.active {
+  color: #e7edf8;
+  background: #2563eb;
+}
+
 .panel {
   background: #111b2f;
   border: 1px solid #1f2e47;
@@ -270,6 +299,11 @@ textarea:focus {
   background: rgba(148, 163, 184, 0.06);
 }
 
+.accordion-button.selected {
+  background: rgba(59, 130, 246, 0.15);
+  border-left: 3px solid #3b82f6;
+}
+
 .accordion-panel {
   padding: 0 14px 18px;
 }
@@ -293,6 +327,7 @@ small {
 }
 
 .file-dropzone {
+  position: relative;
   border: 2px dashed #334155;
   border-radius: 18px;
   padding: 28px;

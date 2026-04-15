@@ -30,13 +30,14 @@
 
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import Frequency from "./Frequency";
 
 // =============================================================================
 // CONSTANTES DE CONFIGURACIÓN
 // =============================================================================
 
 /** URL base de la API METIS */
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 /** Máximo lag para cálculo de autocorrelación (correlograma) */
 const MAX_LAG = 10;
@@ -220,6 +221,7 @@ export default function App() {
   const [analysis, setAnalysis] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [activeTab, setActiveTab] = useState("validation");
 
   // ---------------------------------------------------------------------------
   // MEMOIZACIÓN DE CÁLCULOS
@@ -291,7 +293,7 @@ export default function App() {
       }
     } catch (error) {
       setFetchError(
-        "No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en http://127.0.0.1:8000"
+        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
       );
       setAnalysis(null);
     } finally {
@@ -358,15 +360,34 @@ export default function App() {
     <div className="app-shell">
       <header className="page-header">
         <div>
-          <h1>METIS — Validación Hidrológica</h1>
+          <h1>METIS — Análisis Hidrológico</h1>
           <p>
-            Carga una serie, valida su calidad estadística y revisa los resultados de independencia,
-            homogeneidad, tendencia y atípicos.
+            Sistema de validación estadística y análisis de frecuencia para series hidrológicas.
           </p>
+        </div>
+        <div className="tab-navigation">
+          <button
+            type="button"
+            className={`tab-button ${activeTab === "validation" ? "active" : ""}`}
+            onClick={() => setActiveTab("validation")}
+          >
+            Validación
+          </button>
+          <button
+            type="button"
+            className={`tab-button ${activeTab === "frequency" ? "active" : ""}`}
+            onClick={() => setActiveTab("frequency")}
+          >
+            Frecuencia
+          </button>
         </div>
       </header>
 
-      <div className="section-grid">
+      {activeTab === "frequency" ? (
+        <Frequency series={series} seriesId={seriesId} />
+      ) : (
+        <>
+          <div className="section-grid">
         <section className="panel">
           <h2>1. Ingesta de datos</h2>
           <div
@@ -554,6 +575,8 @@ export default function App() {
           <p>Ejecuta el análisis para ver los resultados de cada prueba.</p>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }

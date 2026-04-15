@@ -235,6 +235,48 @@ Requiere que la API y el frontend estén corriendo en background.
 
 ---
 
+## Despliegue en Render
+
+Este proyecto está configurado para desplegarse en Render usando dos servicios separados:
+- **Backend**: Web Service (Python/FastAPI)
+- **Frontend**: Static Site (React/Vite)
+
+### Pasos de despliegue
+
+1. **Conectar repositorio a Render**
+   - Ve a [render.com](https://render.com) y conecta tu repositorio de GitHub
+   - Render detectará automáticamente el archivo `render.yaml` y creará los servicios
+
+2. **Configurar variables de entorno**
+   - En el servicio de frontend, configura `VITE_API_URL` con la URL del backend de Render
+   - Ejemplo: `https://metis-backend.onrender.com`
+   - Opcional: En el backend, configura `FRONTEND_URL` para restringir CORS (por defecto permite todos los orígenes)
+
+3. **Construir frontend localmente (opcional)**
+   - Si prefieres construir el frontend localmente antes de commitear:
+     ```bash
+     cd frontend
+     npm install
+     npm run build
+     ```
+   - El directorio `frontend/dist` será servido por Render como sitio estático
+
+### Arquitectura de despliegue
+
+- **Backend**: Ejecuta `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
+- **Frontend**: Construye con `npm run build` y sirve `frontend/dist`
+- **CORS**: Configurado dinámicamente via variable de entorno `FRONTEND_URL`
+- **Sin base de datos**: El backend es stateless, ideal para prototipos
+
+### Coste
+
+Ambos servicios usan el plan gratuito de Render:
+- Web Service (Python): Plan gratuito
+- Static Site (React): Plan gratuito
+
+---
+
+
 *Documento de trabajo interno — PI ISI UCC 2026*
 *Octavio Carpineti | Kevin Massholder*
 *Director: Dr. Ing. Carlos Catalini | Co-director: Mgter. Ing. Facundo Ganancias*

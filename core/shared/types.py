@@ -141,3 +141,120 @@ class ValidationReport:
     homogeneity: GroupVerdict
     trend: GroupVerdict
     outliers: GroupVerdict
+
+
+@dataclass(frozen=True)
+class GoodnessOfFit:
+    """Indicadores de bondad de ajuste para una distribución.
+
+    Contiene los resultados de las pruebas estadísticas que evalúan
+    qué tan bien se ajusta una distribución teórica a los datos observados.
+
+    Attributes:
+        chi_square: Estadístico de prueba Chi Cuadrado.
+        chi_square_p_value: Valor p asociado a la prueba Chi Cuadrado.
+        chi_square_verdict: Veredicto de la prueba Chi Cuadrado.
+        ks_statistic: Estadístico de Kolmogorov-Smirnov.
+        ks_p_value: Valor p asociado a la prueba KS.
+        ks_verdict: Veredicto de la prueba KS.
+        eea: Error Estándar de Ajuste (Standard Error of Fit).
+        eea_verdict: Veredicto basado en el EEA (aceptado si < umbral).
+
+    Example:
+        >>> gof = GoodnessOfFit(
+        ...     chi_square=5.23,
+        ...     chi_square_p_value=0.73,
+        ...     chi_square_verdict="ACCEPTED",
+        ...     ks_statistic=0.08,
+        ...     ks_p_value=0.92,
+        ...     ks_verdict="ACCEPTED",
+        ...     eea=0.045,
+        ...     eea_verdict="ACCEPTED"
+        ... )
+    """
+
+    chi_square: float
+    chi_square_p_value: float
+    chi_square_verdict: Literal["ACCEPTED", "REJECTED"]
+    ks_statistic: float
+    ks_p_value: float
+    ks_verdict: Literal["ACCEPTED", "REJECTED"]
+    eea: float
+    eea_verdict: Literal["ACCEPTED", "REJECTED"]
+
+
+@dataclass(frozen=True)
+class FitResult:
+    """Resultado del ajuste de una distribución a una serie hidrológica.
+
+    Contiene la distribución calibrada, sus parámetros estimados y los
+    indicadores de bondad de ajuste.
+
+    Attributes:
+        distribution_name: Nombre de la distribución ajustada.
+            Ejemplo: "Log-Pearson III", "Gumbel", "GEV"
+        parameters: Diccionario con los parámetros estimados.
+            Las claves dependen de la distribución:
+            - Normal: {"mu": float, "sigma": float}
+            - Log-Normal: {"mu": float, "sigma": float}
+            - Gumbel: {"xi": float, "alpha": float}
+            - GEV: {"xi": float, "alpha": float, "k": float}
+            - Pearson III: {"mu": float, "sigma": float, "gamma": float}
+            - Log-Pearson III: {"mu": float, "sigma": float, "gamma": float}
+        estimation_method: Método utilizado para estimar parámetros.
+            Valores: "MOM" (Método de Momentos), "MLE" (Máxima Verosimilitud),
+            "MEnt" (Máxima Entropía)
+        goodness_of_fit: Indicadores de bondad de ajuste.
+        is_recommended: Indica si esta distribución es la recomendada
+            según los criterios de bondad de ajuste.
+
+    Example:
+        >>> fit = FitResult(
+        ...     distribution_name="Log-Pearson III",
+        ...     parameters={"mu": 2.3, "sigma": 0.45, "gamma": 0.12},
+        ...     estimation_method="MOM",
+        ...     goodness_of_fit=gof,
+        ...     is_recommended=True
+        ... )
+    """
+
+    distribution_name: str
+    parameters: dict[str, float]
+    estimation_method: Literal["MOM", "MLE", "MEnt"]
+    goodness_of_fit: GoodnessOfFit
+    is_recommended: bool
+
+
+@dataclass(frozen=True)
+class DesignEvent:
+    """Evento de diseño calculado a partir de una distribución ajustada.
+
+    Representa el valor de caudal extremo correspondiente a un período
+    de retorno dado, utilizado en ingeniería hidrológica para diseño
+    de estructuras hidráulicas.
+
+    Attributes:
+        return_period: Período de retorno T en años.
+            Ejemplo: 100 para evento centenario, 50 para evento quincuagenal.
+        annual_probability: Probabilidad anual de ocurrencia, calculada como 1/T.
+            Ejemplo: 0.01 para T=100, 0.02 para T=50.
+        design_value: Valor del evento de diseño (caudal extremo) en las
+            unidades de la serie original (ej: m³/s).
+        distribution_name: Nombre de la distribución utilizada para el cálculo.
+        parameters: Parámetros de la distribución utilizada.
+
+    Example:
+        >>> event = DesignEvent(
+        ...     return_period=100.0,
+        ...     annual_probability=0.01,
+        ...     design_value=1250.5,
+        ...     distribution_name="Log-Pearson III",
+        ...     parameters={"mu": 2.3, "sigma": 0.45, "gamma": 0.12}
+        ... )
+    """
+
+    return_period: float
+    annual_probability: float
+    design_value: float
+    distribution_name: str
+    parameters: dict[str, float]
