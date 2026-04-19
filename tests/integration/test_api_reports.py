@@ -244,23 +244,27 @@ class TestPDFEndpoint:
 class TestDownloadEndpoint:
     """Tests para GET /reports/download/{filename}."""
 
-    def test_download_existing_pdf(self, client, temp_output_dir):
+    def test_download_existing_pdf(self, client, temp_output_dir, monkeypatch):
         """Descarga un PDF existente."""
-        # Crear un PDF de prueba
-        pdf_path = os.path.join(temp_output_dir, "test.pdf")
-        with open(pdf_path, "w") as f:
+        # Change to temp directory so relative paths work
+        monkeypatch.chdir(temp_output_dir)
+
+        # Crear un PDF de prueba en el directorio actual (temp_output_dir)
+        pdf_filename = "test.pdf"
+        with open(pdf_filename, "w") as f:
             f.write("fake pdf content")
 
-        response = client.get(f"/reports/download/{pdf_path}")
+        response = client.get(f"/reports/download/{pdf_filename}")
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
 
-    def test_download_nonexistent_pdf(self, client, temp_output_dir):
+    def test_download_nonexistent_pdf(self, client, temp_output_dir, monkeypatch):
         """Intenta descargar un PDF inexistente."""
-        pdf_path = os.path.join(temp_output_dir, "nonexistent.pdf")
+        # Change to temp directory for consistent path resolution
+        monkeypatch.chdir(temp_output_dir)
 
-        response = client.get(f"/reports/download/{pdf_path}")
+        response = client.get("/reports/download/nonexistent.pdf")
 
         assert response.status_code == 404
 
