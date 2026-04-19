@@ -31,7 +31,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
-from api.routers import frequency, validate
+from api.routers import frequency, reports, validate
 from api.schemas.validation import HealthResponse
 
 
@@ -107,6 +107,7 @@ app.add_middleware(
 # Inclusión de routers
 app.include_router(validate.router, prefix="", tags=["validate"])
 app.include_router(frequency.router, prefix="/frequency", tags=["frequency"])
+app.include_router(reports.router, prefix="/reports", tags=["reports"])
 
 
 @app.get(

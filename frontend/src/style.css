@@ -214,6 +214,16 @@ textarea:focus {
   font-size: 0.95rem;
 }
 
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  width: fit-content;
+}
+
 .status-card .pill {
   display: inline-flex;
   align-items: center;

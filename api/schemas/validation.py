@@ -82,6 +82,7 @@ class TestResultSchema(BaseModel):
         critical_value: Valor de referencia para comparación.
         alpha: Nivel de significancia (siempre 0.05 en METIS).
         verdict: Veredicto binario "ACCEPTED" o "REJECTED".
+        detail: Diccionario con datos adicionales específicos de la prueba.
 
     Note:
         El veredicto se determina comparando |statistic| vs critical_value.
@@ -94,6 +95,10 @@ class TestResultSchema(BaseModel):
     alpha: float = Field(description="Nivel de significancia, siempre 0.05")
     verdict: Literal["ACCEPTED", "REJECTED"] = Field(
         description="Veredicto final de la prueba"
+    )
+    detail: dict = Field(
+        default_factory=dict,
+        description="Detalles adicionales específicos de la prueba",
     )
 
 

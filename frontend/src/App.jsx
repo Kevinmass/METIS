@@ -1,36 +1,30 @@
 /**
- * Aplicación React METIS - Interfaz de Validación Hidrológica
+ * METIS - Sistema Integrado de Análisis Hidrológico
  *
- * Este módulo implementa la UI completa para el sistema METIS, permitiendo:
- *   - Ingesta manual de series numéricas
- *   - Carga de archivos CSV y Excel vía drag & drop
- *   - Visualización de advertencias de valores problemáticos
- *   - Ejecución de análisis de validación estadística
- *   - Visualización de resultados en modo semáforo
- *   - Gráficos de dispersión temporal y correlograma
+ * Este módulo implementa la UI completa unificada para el sistema METIS,
+ * integrando tres módulos en un flujo continuo:
  *
- * Arquitectura de componentes:
- *   - Funciones helper (parseCsv, parseExcel, computeAutoCorrelation)
- *   - Componente App (estado global, handlers de eventos)
- *   - Sub-secciones JSX: Ingesta, Resumen, Visualizaciones, Resultados
+ *   1. VALIDACIÓN: Ingesta de datos, validación estadística básica
+ *      - POST /validate: Tests de independencia, homogeneidad, tendencia, atípicos
  *
- * Integración con API:
- *   - POST /validate: Envío de serie como JSON
- *   - Respuesta: ValidationResponse con resultados de 4 grupos de pruebas
+ *   2. ANÁLISIS DE FRECUENCIA: Ajuste de distribuciones y eventos de diseño
+ *      - POST /frequency/fit: Ajuste de distribuciones (Gumbel, GEV, Log-Pearson III, etc.)
+ *      - POST /frequency/design-event: Cálculo de eventos de diseño
  *
- * Estado principal:
- *   - series: Array de valores numéricos
- *   - seriesId: Identificador para trazabilidad
- *   - analysis: Resultado completo de la API
- *   - warnings: Advertencias de validación previa
- *   - isSending: Estado de loading durante análisis
+ *   3. ANÁLISIS SAMHIA: Análisis estadístico completo con reportes PDF
+ *      - POST /reports/analyze: Análisis estadístico completo
+ *      - POST /reports/pdf: Generación de reportes PDF de 10 páginas
+ *
+ * Arquitectura unificada:
+ *   - Datos fluyen de arriba hacia abajo (serie compartida entre módulos)
+ *   - Cada módulo tiene su propio panel ejecutable independientemente
+ *   - Resultados se muestran en secciones colapsables
  *
  * @module App
  */
 
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
-import Frequency from "./Frequency";
 
 // =============================================================================
 // CONSTANTES DE CONFIGURACIÓN
@@ -41,6 +35,19 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 /** Máximo lag para cálculo de autocorrelación (correlograma) */
 const MAX_LAG = 10;
+
+/** Métodos de estimación disponibles para análisis de frecuencia */
+const ESTIMATION_METHODS = ["MOM", "MLE", "MEnt"];
+
+/** Distribuciones disponibles para ajuste de frecuencia */
+const AVAILABLE_DISTRIBUTIONS = [
+  "Log-Pearson III",
+  "Gumbel",
+  "GEV",
+  "Log-Normal",
+  "Normal",
+  "Pearson III",
+];
 
 // =============================================================================
 // FUNCIONES DE UTILIDAD - MAPEO DE VEREDICTOS
@@ -211,17 +218,53 @@ function serieToCsv(series) {
  */
 export default function App() {
   // ---------------------------------------------------------------------------
-  // ESTADO GLOBAL
+  // ESTADO GLOBAL - DATOS COMPARTIDOS
   // ---------------------------------------------------------------------------
 
   const [series, setSeries] = useState([0, 0, 0]);
   const [seriesId, setSeriesId] = useState("serie_local");
-  const [fetchError, setFetchError] = useState("");
   const [fileError, setFileError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // ESTADO - MÓDULO DE VALIDACIÓN
+  // ---------------------------------------------------------------------------
+
+  const [fetchError, setFetchError] = useState("");
   const [analysis, setAnalysis] = useState(null);
   const [isSending, setIsSending] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [activeTab, setActiveTab] = useState("validation");
+
+  // ---------------------------------------------------------------------------
+  // ESTADO - MÓDULO DE FRECUENCIA
+  // ---------------------------------------------------------------------------
+
+  const [estimationMethod, setEstimationMethod] = useState("MOM");
+  const [selectedDistributions, setSelectedDistributions] = useState(AVAILABLE_DISTRIBUTIONS);
+  const [fitResults, setFitResults] = useState(null);
+  const [fitError, setFitError] = useState("");
+  const [isFitting, setIsFitting] = useState(false);
+  const [selectedDistribution, setSelectedDistribution] = useState(null);
+  const [returnPeriod, setReturnPeriod] = useState(100);
+  const [designEvent, setDesignEvent] = useState(null);
+  const [designError, setDesignError] = useState("");
+  const [isCalculatingDesign, setIsCalculatingDesign] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // ESTADO - MÓDULO SAMHIA
+  // ---------------------------------------------------------------------------
+
+  const [reservoirName, setReservoirName] = useState("Embalse");
+  const [seriesName, setSeriesName] = useState("Variable");
+  const [dates, setDates] = useState([]);
+  const [samhiaData, setSamhiaData] = useState([]);
+  const [alpha, setAlpha] = useState(0.05);
+  const [analysisResults, setAnalysisResults] = useState(null);
+  const [analysisError, setAnalysisError] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [pdfPath, setPdfPath] = useState(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState("");
+  const [activeSamhiaTab, setActiveSamhiaTab] = useState("analysis");
 
   // ---------------------------------------------------------------------------
   // MEMOIZACIÓN DE CÁLCULOS
@@ -259,8 +302,15 @@ export default function App() {
   /** Elimina fila en índice específico */
   const removeRow = (index) => setSeries((prev) => prev.filter((_, i) => i !== index));
 
+  /** Toggle selección de distribución para ajuste de frecuencia */
+  const toggleDistribution = (dist) => {
+    setSelectedDistributions((prev) =>
+      prev.includes(dist) ? prev.filter((d) => d !== dist) : [...prev, dist]
+    );
+  };
+
   // ---------------------------------------------------------------------------
-  // HANDLERS DE API
+  // HANDLERS DE API - VALIDACIÓN
   // ---------------------------------------------------------------------------
 
   /**
@@ -298,6 +348,234 @@ export default function App() {
       setAnalysis(null);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // HANDLERS DE API - FRECUENCIA
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ejecuta ajuste de distribuciones enviando serie a la API.
+   *
+   * POST /frequency/fit con body { series, estimation_method, distribution_names }
+   */
+  const handleFit = async () => {
+    setFitError("");
+    setFitResults(null);
+    setDesignEvent(null);
+
+    if (series.length < 3) {
+      setFitError("La serie debe tener al menos 3 valores numéricos.");
+      return;
+    }
+
+    setIsFitting(true);
+    try {
+      const response = await fetch(`${API_BASE}/frequency/fit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          series,
+          estimation_method: estimationMethod,
+          distribution_names: selectedDistributions,
+        }),
+      });
+
+      const json = await response.json();
+      if (!response.ok) {
+        setFitError(json.detail || "Error al ajustar distribuciones");
+      } else {
+        setFitResults(json);
+        if (json.recommended_distribution) {
+          setSelectedDistribution(json.recommended_distribution);
+        }
+      }
+    } catch (error) {
+      setFitError(
+        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
+      );
+    } finally {
+      setIsFitting(false);
+    }
+  };
+
+  /**
+   * Calcula evento de diseño para el período de retorno seleccionado.
+   *
+   * POST /frequency/design-event con body { distribution_name, parameters, return_period }
+   */
+  const handleDesignEvent = async () => {
+    setDesignError("");
+    setDesignEvent(null);
+
+    if (!selectedDistribution) {
+      setDesignError("Selecciona una distribución primero.");
+      return;
+    }
+
+    if (returnPeriod <= 0) {
+      setDesignError("El período de retorno debe ser positivo.");
+      return;
+    }
+
+    setIsCalculatingDesign(true);
+    try {
+      const response = await fetch(`${API_BASE}/frequency/design-event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          distribution_name: selectedDistribution.distribution_name,
+          parameters: selectedDistribution.parameters,
+          return_period: returnPeriod,
+        }),
+      });
+
+      const json = await response.json();
+      if (!response.ok) {
+        setDesignError(json.detail || "Error al calcular evento de diseño");
+      } else {
+        setDesignEvent(json);
+      }
+    } catch (error) {
+      setDesignError(
+        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
+      );
+    } finally {
+      setIsCalculatingDesign(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // HANDLERS DE API - SAMHIA
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ejecuta análisis estadístico completo SAMHIA.
+   *
+   * POST /reports/analyze con datos de la serie
+   */
+  const handleAnalyzeSamhia = async () => {
+    setAnalysisError("");
+    setAnalysisResults(null);
+
+    const validData = series.filter((v) => Number.isFinite(v));
+    if (validData.length < 12) {
+      setAnalysisError("La serie debe tener al menos 12 datos válidos para el análisis SAMHIA.");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const analysisDates = dates.length === validData.length
+        ? dates
+        : validData.map((_, i) => `2020-${String((i % 12) + 1).padStart(2, '0')}-15`);
+
+      const response = await fetch(`${API_BASE}/reports/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data: validData,
+          dates: analysisDates,
+          series_name: seriesName,
+          reservoir_name: reservoirName,
+          alpha: alpha,
+        }),
+      });
+
+      const json = await response.json();
+      if (!response.ok) {
+        setAnalysisError(json.detail || "Error al ejecutar análisis SAMHIA");
+      } else {
+        setAnalysisResults(json);
+        setSamhiaData(validData);
+      }
+    } catch (error) {
+      setAnalysisError(
+        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
+      );
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  /**
+   * Genera reporte PDF SAMHIA.
+   *
+   * POST /reports/pdf
+   */
+  const handleGeneratePdf = async () => {
+    setPdfError("");
+    setPdfPath(null);
+
+    const validData = series.filter((v) => Number.isFinite(v));
+    if (validData.length < 12) {
+      setPdfError("La serie debe tener al menos 12 datos válidos.");
+      return;
+    }
+
+    setIsGeneratingPdf(true);
+    try {
+      const analysisDates = dates.length === validData.length
+        ? dates
+        : validData.map((_, i) => `2020-${String((i % 12) + 1).padStart(2, '0')}-15`);
+
+      const response = await fetch(`${API_BASE}/reports/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data: validData,
+          dates: analysisDates,
+          series_name: seriesName,
+          reservoir_name: reservoirName,
+          alpha: alpha,
+          output_path: `./samhia_report_${reservoirName}_${seriesName}.pdf`,
+          institution: "Universidad Católica de Córdoba - EHCPA",
+          author: "Sistema METIS",
+        }),
+      });
+
+      const json = await response.json();
+      if (!response.ok) {
+        setPdfError(json.detail || "Error al generar PDF");
+      } else {
+        setPdfPath(json.pdf_path);
+      }
+    } catch (error) {
+      setPdfError(
+        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
+      );
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  /**
+   * Descarga el PDF generado.
+   */
+  const handleDownloadPdf = async () => {
+    if (!pdfPath) return;
+
+    try {
+      const filename = pdfPath.split(/[\\/]/).pop();
+      const response = await fetch(`${API_BASE}/reports/download/${encodeURIComponent(filename)}`);
+
+      if (!response.ok) {
+        setPdfError("Error al descargar el PDF");
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `SAMHIA_${reservoirName}_${seriesName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      setPdfError("Error al descargar el PDF");
     }
   };
 
@@ -360,34 +638,18 @@ export default function App() {
     <div className="app-shell">
       <header className="page-header">
         <div>
-          <h1>METIS — Análisis Hidrológico</h1>
+          <h1>METIS — Sistema Integrado de Análisis Hidrológico</h1>
           <p>
-            Sistema de validación estadística y análisis de frecuencia para series hidrológicas.
+            Plataforma unificada para validación estadística, análisis de frecuencia y reportes SAMHIA.
+            Carga tus datos una vez y ejecuta los análisis que necesites.
           </p>
-        </div>
-        <div className="tab-navigation">
-          <button
-            type="button"
-            className={`tab-button ${activeTab === "validation" ? "active" : ""}`}
-            onClick={() => setActiveTab("validation")}
-          >
-            Validación
-          </button>
-          <button
-            type="button"
-            className={`tab-button ${activeTab === "frequency" ? "active" : ""}`}
-            onClick={() => setActiveTab("frequency")}
-          >
-            Frecuencia
-          </button>
         </div>
       </header>
 
-      {activeTab === "frequency" ? (
-        <Frequency series={series} seriesId={seriesId} />
-      ) : (
-        <>
-          <div className="section-grid">
+      {/* ================================================================
+          SECCIÓN 1: INGESTA Y RESUMEN DE DATOS
+          ================================================================ */}
+      <div className="section-grid">
         <section className="panel">
           <h2>1. Ingesta de datos</h2>
           <div
@@ -575,8 +837,365 @@ export default function App() {
           <p>Ejecuta el análisis para ver los resultados de cada prueba.</p>
         )}
       </section>
-        </>
-      )}
+
+      {/* ================================================================
+          SECCIÓN 4: ANÁLISIS DE FRECUENCIA
+          ================================================================ */}
+      <section className="panel">
+        <h2>4. Análisis de Frecuencia</h2>
+        <p style={{ color: "#94a3b8", marginBottom: "18px" }}>
+          Ajusta distribuciones de probabilidad a tu serie y calcula eventos de diseño.
+        </p>
+
+        <div className="section-grid">
+          {/* Panel de configuración de frecuencia */}
+          <div>
+            <div style={{ marginBottom: "18px" }}>
+              <label htmlFor="estimation-method">
+                <strong>Método de estimación:</strong>
+              </label>
+              <select
+                id="estimation-method"
+                value={estimationMethod}
+                onChange={(e) => setEstimationMethod(e.target.value)}
+                style={{ marginTop: "8px", width: "100%" }}
+              >
+                {ESTIMATION_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {method}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "18px" }}>
+              <strong>Distribuciones a ajustar:</strong>
+              <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {AVAILABLE_DISTRIBUTIONS.map((dist) => (
+                  <label
+                    key={dist}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 10px",
+                      background: selectedDistributions.includes(dist) ? "#1e3a5f" : "#0f1a2f",
+                      border: selectedDistributions.includes(dist) ? "1px solid #3b82f6" : "1px solid #1f2e47",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDistributions.includes(dist)}
+                      onChange={() => toggleDistribution(dist)}
+                    />
+                    <span>{dist}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="button-group">
+              <button
+                type="button"
+                className="button-primary"
+                onClick={handleFit}
+                disabled={isFitting || selectedDistributions.length === 0}
+              >
+                {isFitting ? "Ajustando..." : "Ajustar distribuciones"}
+              </button>
+            </div>
+
+            {fitError && <div className="error-banner" style={{ marginTop: "12px" }}>{fitError}</div>}
+          </div>
+
+          {/* Panel de resultados de ajuste */}
+          <div>
+            {fitResults ? (
+              <>
+                <div className="status-card" style={{ marginBottom: "18px" }}>
+                  <strong>Distribución recomendada</strong>
+                  {fitResults.recommended_distribution ? (
+                    <>
+                      <p className="pill accepted" style={{ marginTop: "8px" }}>
+                        {fitResults.recommended_distribution.distribution_name}
+                      </p>
+                      <p style={{ marginTop: "8px", fontSize: "0.9rem", color: "#94a3b8" }}>
+                        Método: {fitResults.estimation_method} | N: {fitResults.n}
+                      </p>
+                    </>
+                  ) : (
+                    <p>No se pudo determinar una distribución recomendada.</p>
+                  )}
+                </div>
+
+                <div className="accordion">
+                  {fitResults.distributions.map((dist) => (
+                    <DistributionResult
+                      key={dist.distribution_name}
+                      distribution={dist}
+                      isSelected={selectedDistribution?.distribution_name === dist.distribution_name}
+                      onSelect={() => setSelectedDistribution(dist)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p>Configura y ejecuta el análisis para ver los resultados.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Cálculo de evento de diseño */}
+        {fitResults && selectedDistribution && (
+          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #1f2e47" }}>
+            <h3>Cálculo de evento de diseño</h3>
+            <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "12px" }}>
+              <div style={{ flex: 1, minWidth: "200px" }}>
+                <label htmlFor="return-period">
+                  <strong>Período de retorno (años):</strong>
+                </label>
+                <input
+                  id="return-period"
+                  type="number"
+                  value={returnPeriod}
+                  onChange={(e) => setReturnPeriod(Number(e.target.value))}
+                  min="1"
+                  step="1"
+                  style={{ marginTop: "8px" }}
+                />
+              </div>
+              <button
+                type="button"
+                className="button-primary"
+                onClick={handleDesignEvent}
+                disabled={isCalculatingDesign}
+              >
+                {isCalculatingDesign ? "Calculando..." : "Calcular evento de diseño"}
+              </button>
+            </div>
+
+            {designError && <div className="error-banner" style={{ marginTop: "12px" }}>{designError}</div>}
+
+            {designEvent && (
+              <div className="status-card" style={{ marginTop: "18px" }}>
+                <strong>Resultado del evento de diseño</strong>
+                <div className="table-wrapper" style={{ marginTop: "12px" }}>
+                  <table>
+                    <tbody>
+                      <tr>
+                        <th>Período de retorno</th>
+                        <td>{designEvent.return_period.toFixed(1)} años</td>
+                      </tr>
+                      <tr>
+                        <th>Probabilidad anual</th>
+                        <td>{(designEvent.annual_probability * 100).toFixed(2)}%</td>
+                      </tr>
+                      <tr>
+                        <th>Valor de diseño</th>
+                        <td style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#7dd3fc" }}>
+                          {designEvent.design_value.toFixed(2)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Distribución utilizada</th>
+                        <td>{designEvent.distribution_name}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* ================================================================
+          SECCIÓN 5: ANÁLISIS SAMHIA Y GENERACIÓN DE REPORTES
+          ================================================================ */}
+      <section className="panel">
+        <h2>5. Análisis SAMHIA y Reportes PDF</h2>
+        <p style={{ color: "#94a3b8", marginBottom: "18px" }}>
+          Análisis estadístico completo con tests detallados y generación de reportes PDF de 10 páginas.
+        </p>
+
+        <div className="section-grid">
+          {/* Panel de configuración SAMHIA */}
+          <div>
+            <div style={{ marginBottom: "12px" }}>
+              <label>
+                <strong>Nombre del embalse:</strong>
+                <input
+                  type="text"
+                  value={reservoirName}
+                  onChange={(e) => setReservoirName(e.target.value)}
+                  style={{ marginTop: "6px", width: "100%" }}
+                  placeholder="Ej: UCC-DAT-ESR-AH-001"
+                />
+              </label>
+            </div>
+
+            <div style={{ marginBottom: "12px" }}>
+              <label>
+                <strong>Nombre de la variable:</strong>
+                <input
+                  type="text"
+                  value={seriesName}
+                  onChange={(e) => setSeriesName(e.target.value)}
+                  style={{ marginTop: "6px", width: "100%" }}
+                  placeholder="Ej: Caudal, Nivel, Precipitación"
+                />
+              </label>
+            </div>
+
+            <div style={{ marginBottom: "18px" }}>
+              <label>
+                <strong>Nivel de significancia (α):</strong>
+                <select
+                  value={alpha}
+                  onChange={(e) => setAlpha(Number(e.target.value))}
+                  style={{ marginTop: "6px", width: "100%" }}
+                >
+                  <option value={0.01}>0.01 (99% confianza)</option>
+                  <option value={0.05}>0.05 (95% confianza)</option>
+                  <option value={0.10}>0.10 (90% confianza)</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="button-group">
+              <button
+                type="button"
+                className="button-primary"
+                onClick={handleAnalyzeSamhia}
+                disabled={isAnalyzing || series.length < 12}
+              >
+                {isAnalyzing ? "Analizando..." : "Ejecutar análisis SAMHIA"}
+              </button>
+            </div>
+
+            {analysisError && <div className="error-banner" style={{ marginTop: "12px" }}>{analysisError}</div>}
+
+            <small style={{ marginTop: "12px", display: "block", color: "#94a3b8" }}>
+              Se requieren al menos 12 datos válidos para el análisis SAMHIA completo.
+            </small>
+          </div>
+
+          {/* Panel de generación de PDF */}
+          <div>
+            <p style={{ marginBottom: "12px" }}>
+              Genera un reporte PDF completo de 10 páginas con:
+            </p>
+            <ul style={{ marginLeft: "20px", marginBottom: "16px", color: "#94a3b8", fontSize: "0.9rem" }}>
+              <li>Gráficos de serie temporal, años calendario e hidrológico</li>
+              <li>Análisis de datos atípicos y boxplots mensuales/anuales</li>
+              <li>Histograma, Q-Q plot y función de autocorrelación</li>
+              <li>Tablas resumen de estadísticas y año hidrológico</li>
+              <li>Resultados de tests de independencia, homogeneidad y tendencia</li>
+            </ul>
+
+            <div className="button-group">
+              <button
+                type="button"
+                className="button-primary"
+                onClick={handleGeneratePdf}
+                disabled={isGeneratingPdf || series.length < 12}
+              >
+                {isGeneratingPdf ? "Generando PDF..." : "Generar reporte PDF"}
+              </button>
+
+              {pdfPath && (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={handleDownloadPdf}
+                >
+                  Descargar PDF
+                </button>
+              )}
+            </div>
+
+            {pdfError && <div className="error-banner" style={{ marginTop: "12px" }}>{pdfError}</div>}
+
+            {pdfPath && (
+              <div className="status-card accepted" style={{ marginTop: "12px" }}>
+                <span className="pill accepted">PDF generado exitosamente</span>
+                <p style={{ marginTop: "8px", fontSize: "0.9rem" }}>
+                  Ruta: {pdfPath}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Resultados del análisis SAMHIA */}
+        {analysisResults && (
+          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #1f2e47" }}>
+            <h3>Resultados del análisis SAMHIA</h3>
+
+            <div className="status-card" style={{ marginBottom: "18px" }}>
+              <strong>Análisis completado</strong>
+              <p>Variable: <strong>{analysisResults.series_name}</strong></p>
+              <p>Embalse: <strong>{analysisResults.reservoir_name}</strong></p>
+              <p>N de datos: <strong>{analysisResults.n_data}</strong></p>
+            </div>
+
+            {/* Tabs de resultados SAMHIA */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+              {["analysis", "independence", "homogeneity", "trend", "outliers"].map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`tab-button ${activeSamhiaTab === tab ? "active" : ""}`}
+                  onClick={() => setActiveSamhiaTab(tab)}
+                  style={{ padding: "8px 16px", fontSize: "0.9rem" }}
+                >
+                  {tab === "analysis" && "Estadísticas"}
+                  {tab === "independence" && "Independencia"}
+                  {tab === "homogeneity" && "Homogeneidad"}
+                  {tab === "trend" && "Tendencia"}
+                  {tab === "outliers" && "Atípicos"}
+                </button>
+              ))}
+            </div>
+
+            {/* Contenido de tabs SAMHIA */}
+            {activeSamhiaTab === "analysis" && (
+              <DescriptiveStatsPanel stats={analysisResults.descriptive_stats} />
+            )}
+            {activeSamhiaTab === "independence" && (
+              <TestResultsPanel
+                title="Tests de Independencia"
+                tests={analysisResults.independence}
+                description="Evalúan si los datos son independientes (no autocorrelacionados)."
+              />
+            )}
+            {activeSamhiaTab === "homogeneity" && (
+              <TestResultsPanel
+                title="Tests de Homogeneidad"
+                tests={analysisResults.homogeneity}
+                description="Evalúan si la serie es homogénea a lo largo del tiempo."
+              />
+            )}
+            {activeSamhiaTab === "trend" && (
+              <TestResultsPanel
+                title="Tests de Tendencia"
+                tests={analysisResults.trend}
+                description="Evalúan si existe tendencia significativa en la serie."
+              />
+            )}
+            {activeSamhiaTab === "outliers" && (
+              <TestResultsPanel
+                title="Detección de Atípicos"
+                tests={analysisResults.outliers}
+                description="Identificación de valores atípicos y puntos de ruptura."
+              />
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -703,4 +1322,233 @@ function Correlogram({ data, band }) {
       </text>
     </svg>
   );
+}
+
+// =============================================================================
+// SUBCOMPONENTES - ANÁLISIS DE FRECUENCIA
+// =============================================================================
+
+function DistributionResult({ distribution, isSelected, onSelect }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="accordion-item">
+      <button
+        className={`accordion-button ${isSelected ? "selected" : ""}`}
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        style={{
+          background: isSelected ? "rgba(59, 130, 246, 0.1)" : "transparent",
+        }}
+      >
+        <span>
+          {distribution.distribution_name}
+          {distribution.is_recommended && (
+            <span className="pill accepted" style={{ marginLeft: "8px", fontSize: "0.8rem" }}>
+              Recomendada
+            </span>
+          )}
+        </span>
+        <span>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="accordion-panel">
+          <div style={{ marginBottom: "12px" }}>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={onSelect}
+              style={{ fontSize: "0.9rem", padding: "8px 14px" }}
+            >
+              {isSelected ? "Seleccionada" : "Seleccionar para evento de diseño"}
+            </button>
+          </div>
+
+          <div style={{ marginBottom: "16px" }}>
+            <h4>Parámetros</h4>
+            <div className="table-wrapper">
+              <table>
+                <tbody>
+                  {Object.entries(distribution.parameters).map(([key, value]) => (
+                    <tr key={key}>
+                      <th>{key}</th>
+                      <td>{typeof value === "number" ? value.toFixed(4) : value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div>
+            <h4>Bondad de ajuste</h4>
+            <div className="table-wrapper">
+              <table>
+                <tbody>
+                  <tr>
+                    <th>Chi Cuadrado</th>
+                    <td>{distribution.goodness_of_fit.chi_square.toFixed(4)}</td>
+                    <td>
+                      <span className={`pill ${distribution.goodness_of_fit.chi_square_verdict === "ACCEPTED" ? "accepted" : "rejected"}`}>
+                        {distribution.goodness_of_fit.chi_square_verdict === "ACCEPTED" ? "Aceptado" : "Rechazado"}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Kolmogorov-Smirnov</th>
+                    <td>{distribution.goodness_of_fit.ks_statistic.toFixed(4)}</td>
+                    <td>
+                      <span className={`pill ${distribution.goodness_of_fit.ks_verdict === "ACCEPTED" ? "accepted" : "rejected"}`}>
+                        {distribution.goodness_of_fit.ks_verdict === "ACCEPTED" ? "Aceptado" : "Rechazado"}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>EEA</th>
+                    <td>{distribution.goodness_of_fit.eea.toFixed(4)}</td>
+                    <td>
+                      <span className={`pill ${distribution.goodness_of_fit.eea_verdict === "ACCEPTED" ? "accepted" : "rejected"}`}>
+                        {distribution.goodness_of_fit.eea_verdict === "ACCEPTED" ? "Aceptado" : "Rechazado"}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// SUBCOMPONENTES - ANÁLISIS SAMHIA
+// =============================================================================
+
+function DescriptiveStatsPanel({ stats }) {
+  const statsData = [
+    { label: "Mediana", value: stats.median?.toFixed(4) },
+    { label: "Media", value: stats.mean?.toFixed(4) },
+    { label: "1er Cuartil (Q25)", value: stats.q25?.toFixed(4) },
+    { label: "3er Cuartil (Q75)", value: stats.q75?.toFixed(4) },
+    { label: "Mínimo", value: stats.minimum?.toFixed(4) },
+    { label: "Máximo", value: stats.maximum?.toFixed(4) },
+    { label: "Asimetría (Skewness)", value: stats.skewness?.toFixed(4) },
+    { label: "Kurtosis", value: stats.kurtosis?.toFixed(4) },
+    { label: "Desv. Estándar", value: stats.std_dev?.toFixed(4) },
+    { label: "Varianza (n-1)", value: stats.variance?.toFixed(4) },
+    { label: "N Datos", value: stats.n },
+    { label: "Coef. Variación (%)", value: stats.coefficient_of_variation?.toFixed(2) || "N/A" },
+  ];
+
+  return (
+    <div>
+      <h4 style={{ marginBottom: "12px" }}>Estadísticas Descriptivas</h4>
+      <div className="table-wrapper">
+        <table>
+          <tbody>
+            {statsData.map((stat) => (
+              <tr key={stat.label}>
+                <th style={{ textAlign: "left", width: "50%" }}>{stat.label}</th>
+                <td style={{ textAlign: "right" }}>{stat.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function TestResultsPanel({ title, tests, description }) {
+  const testEntries = Object.entries(tests || {});
+
+  if (testEntries.length === 0) {
+    return (
+      <div>
+        <h4 style={{ marginBottom: "12px" }}>{title}</h4>
+        <p style={{ color: "#94a3b8" }}>No hay resultados disponibles.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h4 style={{ marginBottom: "12px" }}>{title}</h4>
+      <p style={{ color: "#94a3b8", marginBottom: "12px", fontSize: "0.9rem" }}>
+        {description}
+      </p>
+      <div className="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Test</th>
+              <th>Estadístico</th>
+              <th>Valor crítico</th>
+              <th>p-value/α</th>
+              <th>Veredicto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {testEntries.map(([key, result]) => (
+              <tr key={key}>
+                <td><strong>{formatTestName(key)}</strong></td>
+                <td>{typeof result.statistic === 'number' ? result.statistic.toFixed(4) : "N/A"}</td>
+                <td>{typeof result.critical_value === 'number' ? result.critical_value.toFixed(4) : "N/A"}</td>
+                <td>{typeof result.alpha === 'number' ? result.alpha.toFixed(2) : "N/A"}</td>
+                <td>
+                  <span className={`pill ${verdictLabel(result.verdict)}`}>
+                    {statusText(result.verdict)}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop: "16px" }}>
+        {testEntries.map(([key, result]) => {
+          if (!result.detail) return null;
+          // Convert detail to readable string if it's an object
+          let detailText;
+          if (typeof result.detail === 'string') {
+            detailText = result.detail;
+          } else if (typeof result.detail === 'object' && Object.keys(result.detail).length > 0) {
+            detailText = Object.entries(result.detail)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(', ');
+          } else {
+            return null;
+          }
+          return (
+            <p key={`detail-${key}`} style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "4px" }}>
+              <strong>{formatTestName(key)}:</strong> {detailText}
+            </p>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function formatTestName(key) {
+  const names = {
+    anderson: "Anderson (Pearson)",
+    wald_wolfowitz: "Wald-Wolfowitz (Runs)",
+    durbin_watson: "Durbin-Watson",
+    ljung_box: "Ljung-Box",
+    spearman: "Spearman",
+    helmert: "Helmert",
+    t_student: "t-Student",
+    cramer: "Cramér-von Mises",
+    mann_whitney: "Mann-Whitney",
+    mood: "Mood",
+    mann_kendall: "Mann-Kendall",
+    kolmogorov_smirnov: "Kolmogorov-Smirnov",
+    chow: "Chow (Outliers)",
+    kn: "Kn (Outliers)",
+  };
+  return names[key] || key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
 }

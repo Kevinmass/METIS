@@ -153,6 +153,7 @@ def serialize_test_result(result: TestResult) -> TestResultSchema:
         critical_value=result.critical_value,
         alpha=result.alpha,
         verdict=result.verdict,
+        detail=result.detail or {},
     )
 
 

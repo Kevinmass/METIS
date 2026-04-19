@@ -160,3 +160,133 @@ def run_outliers(series: pd.Series) -> GroupVerdict:
         resolved_verdict=chow.verdict,
         hierarchy_applied=False,
     )
+
+
+def kn_outlier_detection(series: pd.Series, *, alpha: float = 0.05) -> TestResult:
+    """Detección de atípicos mediante método Kn.
+
+    El método Kn usa límites dinámicos basados en el tamaño de muestra
+    para detectar valores atípicos. Es un método estadístico simple
+    basado en desvíos estándar ajustados por n.
+
+    Fórmula:
+        Kn = 0.4083 * ln(n) + 1.1584
+        Límite superior = media + Kn * desv_estándar
+        Límite inferior = media - Kn * desv_estándar
+
+    Interpretación:
+        - Valores fuera de [límite_inf, límite_sup] son marcados como atípicos
+        - Si hay atípicos detectados: veredicto "REJECTED"
+        - Sin atípicos: veredicto "ACCEPTED"
+
+    Args:
+        series: Serie temporal de valores numéricos.
+        alpha: Nivel de significancia. Default 0.05 (no usado directamente
+            en Kn pero mantenido por consistencia de API).
+
+    Returns:
+        TestResult con máximo residual absoluto, límites Kn, veredicto y
+        detalles incluyendo índices de atípicos, cantidad, límites calculados.
+
+    Note:
+        Este método es complementario al test de Chow. Mientras Chow usa
+        residuos studentizados de regresión, Kn usa límites simples basados
+        en media y desvío estándar.
+
+    Example:
+        >>> serie = pd.Series([10, 11, 12, 13, 100, 11, 12, 13])
+        >>> result = kn_outlier_detection(serie)
+        >>> result.verdict
+        'REJECTED'
+        >>> 4 in result.detail["outliers_indices"]  # índice del valor 100
+        True
+    """
+    n = len(series)
+    x = series.to_numpy()
+
+    # Calcular Kn
+    kn = 0.4083 * np.log(n) + 1.1584
+
+    media_val = float(np.mean(x))
+    sd_val = float(np.std(x, ddof=1))
+
+    limite_superior = media_val + kn * sd_val
+    limite_inferior = media_val - kn * sd_val
+
+    # Detectar outliers
+    outliers_mask = (x > limite_superior) | (x < limite_inferior)
+    outliers_indices = np.where(outliers_mask)[0].tolist()
+    outliers_count = len(outliers_indices)
+
+    # Calcular estadístico como distancia máxima al límite más cercano
+    if outliers_count > 0:
+        distances = np.array(
+            [
+                abs(x[i] - limite_superior)
+                if x[i] > limite_superior
+                else abs(x[i] - limite_inferior)
+                if x[i] < limite_inferior
+                else 0
+                for i in range(n)
+            ]
+        )
+        max_distance = np.max(distances[outliers_mask]) if outliers_count > 0 else 0
+    else:
+        max_distance = 0
+
+    verdict = "REJECTED" if outliers_count > 0 else "ACCEPTED"
+
+    return TestResult(
+        name="Kn Outlier Detection",
+        statistic=float(max_distance),
+        critical_value=[float(limite_inferior), float(limite_superior)],
+        alpha=alpha,
+        verdict=verdict,
+        detail={
+            "outliers_indices": outliers_indices,
+            "outliers_count": outliers_count,
+            "kn_value": float(kn),
+            "mean": media_val,
+            "std_dev": sd_val,
+            "lower_limit": float(limite_inferior),
+            "upper_limit": float(limite_superior),
+        },
+    )
+
+
+def run_outliers_with_kn(series: pd.Series) -> GroupVerdict:
+    """Ejecuta detección de atípicos con ambos métodos (Chow y Kn).
+
+    Orquesta la ejecución del test de Chow y la detección Kn sobre la serie.
+    Este grupo reporta ambos métodos individualmente.
+
+    Args:
+        series: Serie temporal de valores numéricos positivos.
+
+    Returns:
+        GroupVerdict con condition="outliers", resultados de Chow y Kn,
+        resolved_verdict igual a "REJECTED" si cualquiera detecta outliers,
+        y hierarchy_applied=False.
+
+    Example:
+        >>> serie = pd.Series([10, 11, 12, 100, 11, 12])
+        >>> group = run_outliers_with_kn(serie)
+        >>> len(group.individual_results)
+        2
+    """
+    chow = chow_test(series)
+    kn = kn_outlier_detection(series)
+
+    # Veredicto resolutivo: si cualquiera detecta outliers -> rechazado
+    resolved_verdict = (
+        "REJECTED"
+        if (chow.verdict == "REJECTED" or kn.verdict == "REJECTED")
+        else "ACCEPTED"
+    )
+
+    return GroupVerdict(
+        condition="outliers",
+        individual_results=[chow, kn],
+        resolved_verdict=resolved_verdict,
+        hierarchy_applied=False,
+    )

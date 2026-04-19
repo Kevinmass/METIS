@@ -7,7 +7,8 @@ select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "
 ignore = ["S101", "S104", "COM812", "ISC001"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["PLR2004"]
+"tests/**/*.py" = ["PLR2004", "NPY002", "PTH118", "PTH110", "PTH123", "PTH119", "PTH120", "S108", "B007", "PERF102", "ARG001", "ARG002", "F841"]
+"SAMHIA_EST.py" = ["PLR2004", "T201"]
 
 [tool.ruff.lint.isort]
 lines-after-imports = 2
