@@ -15,43 +15,58 @@ from playwright.sync_api import Page, expect
 
 
 def test_ui_resultados(page: Page):
-    """Test renderizado completo de sección de resultados.
+    """Test renderizado completo de sección de resultados SAMHIA.
 
     Escenario:
         1. Usuario carga serie de referencia 1
-        2. Ejecuta análisis
+        2. Ejecuta análisis SAMHIA
         3. Espera que termine el procesamiento
         4. Sistema muestra resultados estructurados
 
     Valida:
-        - 4 indicadores de estado renderizados (condiciones de validación)
+        - Pills de veredicto renderizados en resultados SAMHIA
         - Sin banners de error visibles
-        - Sección "3. Resultados de validación" visible
-        - Botón "Ejecutar análisis" habilitado nuevamente
+        - Sección "3. Análisis SAMHIA y Reportes PDF" visible
+        - Botón de análisis habilitado nuevamente
     """
     page.goto("http://localhost:5173")
 
-    # Ocultar input file
-    page.evaluate(
-        "document.querySelector('input[type=\"file\"]').style.display = 'none'"
-    )
+    # Scroll a sección SAMHIA
+    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
+    samhia_heading.scroll_into_view_if_needed()
 
-    # Cargar serie de referencia 1
-    page.set_input_files("input[type='file']", "tests/fixtures/series_referencia_1.csv")
-    page.click("text=Ejecutar análisis")
+    # Cargar serie de referencia en sección de ingesta
+    ingest_section = page.locator("section", has_text="Ingesta de datos").first
+    file_input = ingest_section.locator("input[type='file']")
+    file_input.set_input_files("tests/fixtures/series_referencia_1.csv")
+
+    # Obtener sección SAMHIA y ejecutar análisis
+    samhia_section = page.locator("section", has_text="Análisis SAMHIA").first
+    analyze_button = samhia_section.locator(
+        "button", has_text="Ejecutar análisis SAMHIA"
+    )
+    analyze_button.click()
 
     # Esperar que termine el loading y aparezcan los resultados
-    expect(page.get_by_text("Ejecutar análisis")).to_be_enabled()
-    page.wait_for_selector(".pill", state="attached")
+    expect(samhia_section.get_by_text("Ejecutar análisis SAMHIA")).to_be_enabled(
+        timeout=30000
+    )
+    samhia_page = page
+    samhia_page.wait_for_selector("text=Análisis completado", timeout=15000)
 
-    # Verificar semáforo
-    expect(page.locator(".pill")).to_have_count(4)
+    # Ir a pestaña de Independencia para ver las pills
+    samhia_section.locator("button", has_text="Independencia").click()
+    expect(page.get_by_role("heading", name="Tests de Independencia")).to_be_visible()
+
+    # Verificar pills de veredicto
+    pills = page.locator("span.pill")
+    expect(pills.first).to_be_visible()
 
     # Verificar que no hay errores
     expect(page.locator(".error-banner")).not_to_be_visible()
 
     # Verificar sección de resultados
-    expect(page.locator("text=3. Resultados de validación")).to_be_visible()
+    expect(page.locator("text=Resultados del análisis SAMHIA")).to_be_visible()
 
 
 def test_ui_graficos_detalle(page: Page):

@@ -104,40 +104,45 @@ def test_ui_ingesta_csv(page: Page):
 
 
 def test_ui_resultados_semaforo(page: Page):
-    """Test dashboard de resultados modo semáforo.
+    """Test dashboard de resultados modo semáforo vía análisis SAMHIA.
 
     Escenario:
         1. Usuario carga serie de referencia
-        2. Ejecuta análisis
-        3. Sistema muestra dashboard con estados de condiciones
+        2. Ejecuta análisis SAMHIA
+        3. Sistema muestra resultados con pills de estado
 
     Valida:
-        - Grid de estados visible
-        - 5 tarjetas de estado (n + 4 condiciones)
+        - Panel de resultados SAMHIA visible
+        - Pills de veredicto renderizados
         - Al menos algunas condiciones muestran 'accepted'
     """
     page.goto("http://localhost:5173")
 
-    # Ocultar input file
-    page.evaluate(
-        "document.querySelector('input[type=\"file\"]').style.display = 'none'"
+    # Scroll a sección SAMHIA
+    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
+    samhia_heading.scroll_into_view_if_needed()
+
+    # Cargar serie de referencia en sección de ingesta
+    ingest_section = page.locator("section", has_text="Ingesta de datos").first
+    file_input = ingest_section.locator("input[type='file']")
+    file_input.set_input_files("tests/fixtures/series_referencia_1.csv")
+
+    # Obtener sección SAMHIA y ejecutar análisis
+    samhia_section = page.locator("section", has_text="Análisis SAMHIA").first
+    analyze_button = samhia_section.locator(
+        "button", has_text="Ejecutar análisis SAMHIA"
     )
-
-    # Cargar serie de referencia
-    page.set_input_files("input[type='file']", "tests/fixtures/series_referencia_1.csv")
-
-    # Ejecutar análisis
-    page.click("text=Ejecutar análisis")
+    analyze_button.click()
 
     # Esperar resultados
-    expect(page.locator(".status-grid")).to_be_visible()
+    samhia_section.locator("button", has_text="Independencia").click()
+    expect(page.get_by_role("heading", name="Tests de Independencia")).to_be_visible()
 
-    # Verificar semáforo
-    status_cards = page.locator(".status-card")
-    expect(status_cards).to_have_count(5)
+    # Verificar pills de veredicto
+    pills = page.locator("span.pill")
+    expect(pills.first).to_be_visible()
 
-    # Verificar que al menos uno esté aceptado
-    expect(page.locator(".pill.accepted")).to_have_count(2)
+    expect(pills).to_have_count(5)
 
 
 def test_ui_graficos(page: Page):

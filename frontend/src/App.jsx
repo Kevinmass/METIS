@@ -227,12 +227,8 @@ export default function App() {
   const [dragOver, setDragOver] = useState(false);
 
   // ---------------------------------------------------------------------------
-  // ESTADO - MÓDULO DE VALIDACIÓN
+  // ESTADO - MÓDULO DE VALIDACIÓN (SAMHIA integrado en sección 3)
   // ---------------------------------------------------------------------------
-
-  const [fetchError, setFetchError] = useState("");
-  const [analysis, setAnalysis] = useState(null);
-  const [isSending, setIsSending] = useState(false);
 
   // ---------------------------------------------------------------------------
   // ESTADO - MÓDULO DE FRECUENCIA
@@ -307,48 +303,6 @@ export default function App() {
     setSelectedDistributions((prev) =>
       prev.includes(dist) ? prev.filter((d) => d !== dist) : [...prev, dist]
     );
-  };
-
-  // ---------------------------------------------------------------------------
-  // HANDLERS DE API - VALIDACIÓN
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Ejecuta análisis enviando serie a la API.
-   *
-   * POST /validate con body { series, series_id }
-   * Almacena respuesta en estado 'analysis' o error en 'fetchError'
-   */
-  const handleSubmit = async () => {
-    setFetchError("");
-    if (!seriesValid) {
-      setFetchError("La serie debe tener al menos 3 valores numéricos.");
-      return;
-    }
-
-    setIsSending(true);
-    try {
-      const response = await fetch(`${API_BASE}/validate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ series, series_id: seriesId }),
-      });
-
-      const json = await response.json();
-      if (!response.ok) {
-        setFetchError(json.detail || "Error al procesar la serie");
-        setAnalysis(null);
-      } else {
-        setAnalysis(json);
-      }
-    } catch (error) {
-      setFetchError(
-        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
-      );
-      setAnalysis(null);
-    } finally {
-      setIsSending(false);
-    }
   };
 
   // ---------------------------------------------------------------------------
@@ -589,8 +543,8 @@ export default function App() {
    */
   const handleFile = async (file) => {
     setFileError("");
-    setFetchError("");
-    setAnalysis(null);
+    setAnalysisError("");
+    setAnalysisResults(null);
 
     if (!file) return;
     const accepted = ["text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
@@ -715,9 +669,6 @@ export default function App() {
             <button type="button" className="button-secondary" onClick={addRow}>
               Agregar fila
             </button>
-            <button type="button" className="button-primary" onClick={handleSubmit} disabled={isSending}>
-              {isSending ? "Analizando..." : "Ejecutar análisis"}
-            </button>
           </div>
           <small>
             Las celdas con valores cero o negativos se resaltan y se consideran advertencias en el análisis.
@@ -772,253 +723,13 @@ export default function App() {
         </section>
       </div>
 
-      <section className="panel">
-        <h2>3. Resultados de validación</h2>
-        {fetchError ? <div className="error-banner">{fetchError}</div> : null}
-
-        {analysis ? (
-          <>
-            <div className="status-grid" style={{ marginBottom: "18px" }}>
-              {[
-                { name: "Independencia", verdict: analysis.validation.independence.verdict },
-                { name: "Homogeneidad", verdict: analysis.validation.homogeneity.verdict },
-                { name: "Tendencia", verdict: analysis.validation.trend.mann_kendall.verdict },
-                { name: "Atípicos", verdict: analysis.validation.outliers.chow.verdict },
-              ].map((item) => (
-                <div key={item.name} className="status-card">
-                  <strong>{item.name}</strong>
-                  <span className={`pill ${verdictLabel(item.verdict)}`}>
-                    {statusText(item.verdict)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="accordion">
-              <AccordionItem title="Independencia" description={explanations.independence}>
-                <div className="panel">
-                  <p>
-                    Veredicto general: <strong>{statusText(analysis.validation.independence.verdict)}</strong>
-                  </p>
-                  <p>
-                    Jerarquía aplicada: <strong>{analysis.validation.independence.hierarchy_applied ? "Sí" : "No"}</strong>
-                  </p>
-                  <ResultTable name="Anderson" result={analysis.validation.independence.anderson} />
-                  <ResultTable name="Wald-Wolfowitz" result={analysis.validation.independence.wald_wolfowitz} />
-                </div>
-              </AccordionItem>
-              <AccordionItem title="Homogeneidad" description={explanations.homogeneity}>
-                <div className="panel">
-                  <p>
-                    No hay veredicto único. Cada prueba se reporta por separado.
-                  </p>
-                  <ResultTable name="Helmert" result={analysis.validation.homogeneity.helmert} />
-                  <ResultTable name="t-Student" result={analysis.validation.homogeneity.t_student} />
-                  <ResultTable name="Cramer" result={analysis.validation.homogeneity.cramer} />
-                </div>
-              </AccordionItem>
-              <AccordionItem title="Tendencia" description={explanations.trend}>
-                <div className="panel">
-                  <ResultTable name="Mann-Kendall" result={analysis.validation.trend.mann_kendall} />
-                  <ResultTable name="Kolmogorov-Smirnov" result={analysis.validation.trend.kolmogorov_smirnov} />
-                </div>
-              </AccordionItem>
-              <AccordionItem title="Atípicos" description={explanations.outliers}>
-                <div className="panel">
-                  <ResultTable name="Chow" result={analysis.validation.outliers.chow} />
-                  <p>
-                    Índices marcados: {analysis.validation.outliers.chow.flagged_indices.length > 0 ? analysis.validation.outliers.chow.flagged_indices.join(", ") : "Ninguno"}
-                  </p>
-                </div>
-              </AccordionItem>
-            </div>
-          </>
-        ) : (
-          <p>Ejecuta el análisis para ver los resultados de cada prueba.</p>
-        )}
-      </section>
-
       {/* ================================================================
-          SECCIÓN 4: ANÁLISIS DE FRECUENCIA
+          SECCIÓN 3: ANÁLISIS SAMHIA Y GENERACIÓN DE REPORTES
           ================================================================ */}
       <section className="panel">
-        <h2>4. Análisis de Frecuencia</h2>
+        <h2>3. Análisis SAMHIA y Reportes PDF</h2>
         <p style={{ color: "#94a3b8", marginBottom: "18px" }}>
-          Ajusta distribuciones de probabilidad a tu serie y calcula eventos de diseño.
-        </p>
-
-        <div className="section-grid">
-          {/* Panel de configuración de frecuencia */}
-          <div>
-            <div style={{ marginBottom: "18px" }}>
-              <label htmlFor="estimation-method">
-                <strong>Método de estimación:</strong>
-              </label>
-              <select
-                id="estimation-method"
-                value={estimationMethod}
-                onChange={(e) => setEstimationMethod(e.target.value)}
-                style={{ marginTop: "8px", width: "100%" }}
-              >
-                {ESTIMATION_METHODS.map((method) => (
-                  <option key={method} value={method}>
-                    {method}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ marginBottom: "18px" }}>
-              <strong>Distribuciones a ajustar:</strong>
-              <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {AVAILABLE_DISTRIBUTIONS.map((dist) => (
-                  <label
-                    key={dist}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "6px 10px",
-                      background: selectedDistributions.includes(dist) ? "#1e3a5f" : "#0f1a2f",
-                      border: selectedDistributions.includes(dist) ? "1px solid #3b82f6" : "1px solid #1f2e47",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      fontSize: "0.9rem",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedDistributions.includes(dist)}
-                      onChange={() => toggleDistribution(dist)}
-                    />
-                    <span>{dist}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="button-group">
-              <button
-                type="button"
-                className="button-primary"
-                onClick={handleFit}
-                disabled={isFitting || selectedDistributions.length === 0}
-              >
-                {isFitting ? "Ajustando..." : "Ajustar distribuciones"}
-              </button>
-            </div>
-
-            {fitError && <div className="error-banner" style={{ marginTop: "12px" }}>{fitError}</div>}
-          </div>
-
-          {/* Panel de resultados de ajuste */}
-          <div>
-            {fitResults ? (
-              <>
-                <div className="status-card" style={{ marginBottom: "18px" }}>
-                  <strong>Distribución recomendada</strong>
-                  {fitResults.recommended_distribution ? (
-                    <>
-                      <p className="pill accepted" style={{ marginTop: "8px" }}>
-                        {fitResults.recommended_distribution.distribution_name}
-                      </p>
-                      <p style={{ marginTop: "8px", fontSize: "0.9rem", color: "#94a3b8" }}>
-                        Método: {fitResults.estimation_method} | N: {fitResults.n}
-                      </p>
-                    </>
-                  ) : (
-                    <p>No se pudo determinar una distribución recomendada.</p>
-                  )}
-                </div>
-
-                <div className="accordion">
-                  {fitResults.distributions.map((dist) => (
-                    <DistributionResult
-                      key={dist.distribution_name}
-                      distribution={dist}
-                      isSelected={selectedDistribution?.distribution_name === dist.distribution_name}
-                      onSelect={() => setSelectedDistribution(dist)}
-                    />
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p>Configura y ejecuta el análisis para ver los resultados.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Cálculo de evento de diseño */}
-        {fitResults && selectedDistribution && (
-          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #1f2e47" }}>
-            <h3>Cálculo de evento de diseño</h3>
-            <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "12px" }}>
-              <div style={{ flex: 1, minWidth: "200px" }}>
-                <label htmlFor="return-period">
-                  <strong>Período de retorno (años):</strong>
-                </label>
-                <input
-                  id="return-period"
-                  type="number"
-                  value={returnPeriod}
-                  onChange={(e) => setReturnPeriod(Number(e.target.value))}
-                  min="1"
-                  step="1"
-                  style={{ marginTop: "8px" }}
-                />
-              </div>
-              <button
-                type="button"
-                className="button-primary"
-                onClick={handleDesignEvent}
-                disabled={isCalculatingDesign}
-              >
-                {isCalculatingDesign ? "Calculando..." : "Calcular evento de diseño"}
-              </button>
-            </div>
-
-            {designError && <div className="error-banner" style={{ marginTop: "12px" }}>{designError}</div>}
-
-            {designEvent && (
-              <div className="status-card" style={{ marginTop: "18px" }}>
-                <strong>Resultado del evento de diseño</strong>
-                <div className="table-wrapper" style={{ marginTop: "12px" }}>
-                  <table>
-                    <tbody>
-                      <tr>
-                        <th>Período de retorno</th>
-                        <td>{designEvent.return_period.toFixed(1)} años</td>
-                      </tr>
-                      <tr>
-                        <th>Probabilidad anual</th>
-                        <td>{(designEvent.annual_probability * 100).toFixed(2)}%</td>
-                      </tr>
-                      <tr>
-                        <th>Valor de diseño</th>
-                        <td style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#7dd3fc" }}>
-                          {designEvent.design_value.toFixed(2)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Distribución utilizada</th>
-                        <td>{designEvent.distribution_name}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* ================================================================
-          SECCIÓN 5: ANÁLISIS SAMHIA Y GENERACIÓN DE REPORTES
-          ================================================================ */}
-      <section className="panel">
-        <h2>5. Análisis SAMHIA y Reportes PDF</h2>
-        <p style={{ color: "#94a3b8", marginBottom: "18px" }}>
-          Análisis estadístico completo con tests detallados y generación de reportes PDF de 10 páginas.
+          Análisis estadístico completo basado en SAMHIA_EST.R con tests detallados y generación de reportes PDF de 10 páginas.
         </p>
 
         <div className="section-grid">
@@ -1196,6 +907,181 @@ export default function App() {
           </div>
         )}
       </section>
+
+      {/* ================================================================
+          SECCIÓN 4: ANÁLISIS DE FRECUENCIA
+          ================================================================ */}
+      <section className="panel">
+        <h2>4. Análisis de Frecuencia</h2>
+        <p style={{ color: "#94a3b8", marginBottom: "18px" }}>
+          Ajusta distribuciones de probabilidad a tu serie y calcula eventos de diseño.
+        </p>
+
+        <div className="section-grid">
+          {/* Panel de configuración de frecuencia */}
+          <div>
+            <div style={{ marginBottom: "18px" }}>
+              <label htmlFor="estimation-method">
+                <strong>Método de estimación:</strong>
+              </label>
+              <select
+                id="estimation-method"
+                value={estimationMethod}
+                onChange={(e) => setEstimationMethod(e.target.value)}
+                style={{ marginTop: "8px", width: "100%" }}
+              >
+                {ESTIMATION_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {method}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "18px" }}>
+              <strong>Distribuciones a ajustar:</strong>
+              <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {AVAILABLE_DISTRIBUTIONS.map((dist) => (
+                  <label
+                    key={dist}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 10px",
+                      background: selectedDistributions.includes(dist) ? "#1e3a5f" : "#0f1a2f",
+                      border: selectedDistributions.includes(dist) ? "1px solid #3b82f6" : "1px solid #1f2e47",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDistributions.includes(dist)}
+                      onChange={() => toggleDistribution(dist)}
+                    />
+                    <span>{dist}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="button-group">
+              <button
+                type="button"
+                className="button-primary"
+                onClick={handleFit}
+                disabled={isFitting || selectedDistributions.length === 0}
+              >
+                {isFitting ? "Ajustando..." : "Ajustar distribuciones"}
+              </button>
+            </div>
+
+            {fitError && <div className="error-banner" style={{ marginTop: "12px" }}>{fitError}</div>}
+          </div>
+
+          {/* Panel de resultados de ajuste */}
+          <div>
+            {fitResults ? (
+              <>
+                <div className="status-card" style={{ marginBottom: "18px" }}>
+                  <strong>Distribución recomendada</strong>
+                  {fitResults.recommended_distribution ? (
+                    <>
+                      <p className="pill accepted" style={{ marginTop: "8px" }}>
+                        {fitResults.recommended_distribution.distribution_name}
+                      </p>
+                      <p style={{ marginTop: "8px", fontSize: "0.9rem", color: "#94a3b8" }}>
+                        Método: {fitResults.estimation_method} | N: {fitResults.n}
+                      </p>
+                    </>
+                  ) : (
+                    <p>No se pudo determinar una distribución recomendada.</p>
+                  )}
+                </div>
+
+                <div className="accordion">
+                  {fitResults.distributions.map((dist) => (
+                    <DistributionResult
+                      key={dist.distribution_name}
+                      distribution={dist}
+                      isSelected={selectedDistribution?.distribution_name === dist.distribution_name}
+                      onSelect={() => setSelectedDistribution(dist)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p>Configura y ejecuta el análisis para ver los resultados.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Cálculo de evento de diseño */}
+        {fitResults && selectedDistribution && (
+          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #1f2e47" }}>
+            <h3>Cálculo de evento de diseño</h3>
+            <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "12px" }}>
+              <div style={{ flex: 1, minWidth: "200px" }}>
+                <label htmlFor="return-period">
+                  <strong>Período de retorno (años):</strong>
+                </label>
+                <input
+                  id="return-period"
+                  type="number"
+                  value={returnPeriod}
+                  onChange={(e) => setReturnPeriod(Number(e.target.value))}
+                  min="1"
+                  step="1"
+                  style={{ marginTop: "8px" }}
+                />
+              </div>
+              <button
+                type="button"
+                className="button-primary"
+                onClick={handleDesignEvent}
+                disabled={isCalculatingDesign}
+              >
+                {isCalculatingDesign ? "Calculando..." : "Calcular evento de diseño"}
+              </button>
+            </div>
+
+            {designError && <div className="error-banner" style={{ marginTop: "12px" }}>{designError}</div>}
+
+            {designEvent && (
+              <div className="status-card" style={{ marginTop: "18px" }}>
+                <strong>Resultado del evento de diseño</strong>
+                <div className="table-wrapper" style={{ marginTop: "12px" }}>
+                  <table>
+                    <tbody>
+                      <tr>
+                        <th>Período de retorno</th>
+                        <td>{designEvent.return_period.toFixed(1)} años</td>
+                      </tr>
+                      <tr>
+                        <th>Probabilidad anual</th>
+                        <td>{(designEvent.annual_probability * 100).toFixed(2)}%</td>
+                      </tr>
+                      <tr>
+                        <th>Valor de diseño</th>
+                        <td style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#7dd3fc" }}>
+                          {designEvent.design_value.toFixed(2)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Distribución utilizada</th>
+                        <td>{designEvent.distribution_name}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
     </div>
   );
 }

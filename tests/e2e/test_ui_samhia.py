@@ -63,14 +63,13 @@ class TestUISamhiaNavigation:
     def test_samhia_description_rendered(self, samhia_page: Page):
         """Test de que la descripción del módulo SAMHIA se muestra."""
         # La sección SAMHIA está en App.jsx con título
-        # "5. Análisis SAMHIA y Reportes PDF" y descripción
-        # "Análisis estadístico completo con tests detallados..."
+        # "3. Análisis SAMHIA y Reportes PDF" y descripción actual
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA y Reportes PDF"
         ).first
         description = samhia_section.locator("p").first
         expect(description).to_contain_text(
-            "Análisis estadístico completo con tests detallados"
+            "Análisis estadístico completo basado en SAMHIA_EST.R con tests detallados"
         )
 
 
