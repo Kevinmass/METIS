@@ -9,12 +9,12 @@ services:
       - key: PYTHON_VERSION
         value: 3.10
 
-  - type: static
+  - type: web
     name: metis-frontend
-    runtime: node
+    runtime: static
     plan: free
     buildCommand: cd frontend && npm install && npm run build
-    publishPath: frontend/dist
+    staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
         value: https://metis-backend.onrender.com
