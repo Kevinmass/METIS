@@ -16,4 +16,4 @@ services:
     staticPublishPath: frontend/dist
     envVars:
       - key: VITE_API_URL
-        value: https://metis-backend.onrender.com
+        value: https://metis-backend-31bu.onrender.com
