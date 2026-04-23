@@ -12,7 +12,6 @@ services:
   - type: web
     name: metis-frontend
     runtime: static
-    plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
