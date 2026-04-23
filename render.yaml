@@ -9,7 +9,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.10
 
-  - type: site
+  - type: static
     name: metis-frontend
     runtime: node
     plan: free
