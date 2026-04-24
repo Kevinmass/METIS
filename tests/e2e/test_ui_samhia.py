@@ -480,19 +480,36 @@ class TestUISamhiaPdfGeneration:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
+        # Esperar a que el archivo se procese y el resumen se actualice
+        summary_section = samhia_page.locator(
+            "section", has_text="Resumen de la serie"
+        ).first
+        expect(summary_section).to_contain_text("15")
+
+        # Scroll a la sección SAMHIA para asegurar que está visible
+        samhia_heading = samhia_page.locator("h2", has_text="Análisis SAMHIA")
+        samhia_heading.scroll_into_view_if_needed()
+
         # Generar PDF
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
         ).first
         pdf_button = samhia_section.locator("button", has_text="Generar reporte PDF")
+        expect(pdf_button).to_be_enabled(timeout=5000)
         pdf_button.click()
 
-        # Esperar a que termine la generación
-        samhia_page.wait_for_selector("button >> text=Descargar PDF", timeout=15000)
+        # Esperar a que termine la generación (el botón vuelve a su estado normal)
+        expect(pdf_button).to_have_text("Generar reporte PDF", timeout=20000)
 
-        # Verificar botón de descarga
+        # Verificar si hay mensaje de error
+        error_banner = samhia_section.locator("div.error-banner")
+        if error_banner.is_visible():
+            error_text = error_banner.text_content()
+            pytest.fail(f"Error generando PDF: {error_text}")
+
+        # Verificar botón de descarga (puede tardar en aparecer)
         download_button = samhia_section.locator("button", has_text="Descargar PDF")
-        expect(download_button).to_be_visible()
+        expect(download_button).to_be_visible(timeout=5000)
         expect(download_button).to_be_enabled()
 
 
@@ -570,12 +587,22 @@ class TestUISamhiaCompleteWorkflow:
 
         # 8. Generar PDF
         pdf_button = samhia_section.locator("button", has_text="Generar reporte PDF")
+        expect(pdf_button).to_be_enabled(timeout=5000)
         pdf_button.click()
 
-        # Esperar generación
-        samhia_page.wait_for_selector("button >> text=Descargar PDF", timeout=15000)
+        # Esperar a que termine la generación (el botón vuelve a su estado normal)
+        expect(pdf_button).to_have_text("Generar reporte PDF", timeout=20000)
 
-        # 9. Verificar éxito
+        # Verificar si hay mensaje de error
+        error_banner = samhia_section.locator("div.error-banner")
+        if error_banner.is_visible():
+            error_text = error_banner.text_content()
+            pytest.fail(f"Error generando PDF: {error_text}")
+
+        # 9. Verificar éxito - botón de descarga visible y mensaje de éxito
+        download_button = samhia_section.locator("button", has_text="Descargar PDF")
+        expect(download_button).to_be_visible(timeout=5000)
+        expect(download_button).to_be_enabled()
         expect(samhia_section.locator("text=PDF generado exitosamente")).to_be_visible()
 
     def test_data_preserved_when_scrolling(self, samhia_page: Page, tmp_path):

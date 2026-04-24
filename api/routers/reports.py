@@ -5,6 +5,7 @@ de PDFs y procesamiento batch de múltiples archivos.
 """
 
 import base64
+import logging
 import tempfile
 from io import BytesIO
 from pathlib import Path
@@ -42,6 +43,7 @@ from core.reporting.pdf_generator import (
     generate_samhia_report_pdf,
 )
 from core.reporting.plots import (
+    plot_fdp,
     plot_outliers,
     plot_probability_plot,
     plot_qq,
@@ -473,8 +475,8 @@ async def upload_file(
     response_model=OutlierPlotResponse,
     summary="Generar gráficos de análisis de outliers",
     description=(
-        "Genera los 3 gráficos para análisis de outliers: Control Chart, "
-        "Probability Plot y Q-Q Plot."
+        "Genera los 4 gráficos para análisis de outliers: Control Chart, "
+        "Probability Plot, Q-Q Plot y Función de Densidad de Probabilidad (FDP)."
     ),
 )
 async def generate_outlier_plots(request: OutlierPlotRequest):
@@ -559,6 +561,27 @@ async def generate_outlier_plots(request: OutlierPlotRequest):
                 "qq_plot"
             ] = f"data:image/png;base64,{base64.b64encode(buf3.read()).decode()}"
             plt.close(fig3)
+
+            # 4. FDP (Función de Densidad de Probabilidad)
+            fig4 = plot_fdp(
+                series=series,
+                lower_limit=lower_limit,
+                upper_limit=upper_limit,
+                outliers_indices=outliers_indices or None,
+                y_label=request.series_name,
+            )
+            buf4 = BytesIO()
+            fig4.savefig(buf4, format="png", dpi=150, bbox_inches="tight")
+            buf4.seek(0)
+            plot_urls[
+                "fdp_plot"
+            ] = f"data:image/png;base64,{base64.b64encode(buf4.read()).decode()}"
+            plt.close(fig4)
+
+        # DEBUG: Verificar que todos los plots están presentes
+        logger = logging.getLogger(__name__)
+        logger.warning("[DEBUG] plot_urls keys: %s", list(plot_urls.keys()))
+        logger.warning("[DEBUG] fdp_plot present: %s", "fdp_plot" in plot_urls)
 
         return OutlierPlotResponse(
             success=True,

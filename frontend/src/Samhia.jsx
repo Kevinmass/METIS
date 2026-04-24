@@ -308,6 +308,9 @@ export default function Samhia({ series, seriesId }) {
    * Obtiene los gráficos de análisis de outliers.
    */
   const fetchOutlierPlots = async () => {
+    // DEBUG: Verificar que la función se ejecuta
+    console.log("[DEBUG] fetchOutlierPlots INICIADO");
+    alert("[DEBUG] Cargando gráficos de outliers...");
     setOutlierPlotsLoading(true);
     setOutlierPlotsError("");
     
@@ -330,6 +333,10 @@ export default function Samhia({ series, seriesId }) {
       });
 
       const json = await response.json();
+      // DEBUG: Verificar la respuesta de la API
+      console.log("[DEBUG] API Response:", json);
+      console.log("[DEBUG] plot_urls keys:", json.plot_urls ? Object.keys(json.plot_urls) : "no plot_urls");
+      console.log("[DEBUG] fdp_plot present:", json.plot_urls ? !!json.plot_urls.fdp_plot : false);
       if (!response.ok) {
         setOutlierPlotsError(json.detail || "Error al cargar gráficos");
       } else {
@@ -799,7 +806,7 @@ function TestResultsPanel({ title, tests, description }) {
 /**
  * Panel de análisis de outliers con gráficos.
  */
-function OutliersPanel({ tests, plots, plotsLoading, plotsError, onLoadPlots }) {
+export function OutliersPanel({ tests, plots, plotsLoading, plotsError, onLoadPlots }) {
   const testEntries = Object.entries(tests);
 
   return (
@@ -967,6 +974,29 @@ function OutliersPanel({ tests, plots, plotsLoading, plotsError, onLoadPlots }) 
                   alt="Q-Q Plot"
                   style={{ width: "100%", borderRadius: "4px" }}
                 />
+              )}
+            </div>
+
+            {/* Gráfico 4: FDP */}
+            <div style={{ border: "1px solid #334155", borderRadius: "8px", padding: "16px", background: "#0f172a" }}>
+              <h6 style={{ marginBottom: "12px", fontSize: "0.95rem", color: "#e2e8f0" }}>
+                4. Función de Densidad de Probabilidad (FDP)
+              </h6>
+              <p style={{ fontSize: "0.85rem", color: "#94a3b8", marginBottom: "12px" }}>
+                Muestra la distribución de los datos mediante KDE (Kernel Density Estimate) e histograma.
+                Los límites Kn aparecen marcados con líneas rojas punteadas, permitiendo identificar 
+                visualmente valores extremos aunque el test estadístico no los detecte formalmente.
+              </p>
+              {plots.plot_urls.fdp_plot ? (
+                <img
+                  src={plots.plot_urls.fdp_plot}
+                  alt="Función de Densidad de Probabilidad"
+                  style={{ width: "100%", borderRadius: "4px" }}
+                />
+              ) : (
+                <div style={{ padding: "20px", background: "#1e293b", borderRadius: "4px", color: "#ef4444" }}>
+                  [DEBUG] Gráfico FDP no disponible. Ver consola para detalles.
+                </div>
               )}
             </div>
           </div>

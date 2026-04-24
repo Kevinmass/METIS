@@ -1,0 +1,60 @@
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> pytest tests/e2e/ -v
+================================================= test session starts =================================================
+platform win32 -- Python 3.13.7, pytest-7.4.3, pluggy-1.6.0 -- C:\Users\kevin\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS
+plugins: anyio-3.7.1, asyncio-0.21.1, base-url-2.1.0, playwright-0.7.2
+asyncio: mode=Mode.STRICT
+collected 49 items
+
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_frequency_module_loads PASSED                        [  2%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_distribution_selector PASSED                         [  4%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_estimation_method_selector PASSED                    [  6%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_goodness_of_fit_table PASSED                         [  8%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_recommended_distribution_highlighted PASSED          [ 10%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_return_period_input PASSED                           [ 12%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_design_value_display PASSED                          [ 14%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_annual_probability_display PASSED                    [ 16%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_fit_plot_rendering PASSED                            [ 18%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_export_report_button PASSED                          [ 20%]
+tests/e2e/test_ui_frequency.py::TestUIFrequencyModule::test_workflow_complete PASSED                             [ 22%]
+tests/e2e/test_ui_graficos.py::test_ui_graficos_completos[chromium] PASSED                                       [ 24%]
+tests/e2e/test_ui_ingesta.py::test_ui_ingesta_manual[chromium] PASSED                                            [ 26%]
+tests/e2e/test_ui_ingesta.py::test_ui_ingesta_csv[chromium] PASSED                                               [ 28%]
+tests/e2e/test_ui_ingesta.py::test_ui_resultados_semaforo[chromium] PASSED                                       [ 30%]
+tests/e2e/test_ui_ingesta.py::test_ui_graficos[chromium] PASSED                                                  [ 32%]
+tests/e2e/test_ui_resultados.py::test_ui_resultados[chromium] PASSED                                             [ 34%]
+tests/e2e/test_ui_resultados.py::test_ui_graficos_detalle[chromium] PASSED                                       [ 36%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaNavigation::test_samhia_section_visible[chromium] PASSED                [ 38%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaNavigation::test_samhia_section_scrollable[chromium] PASSED             [ 40%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaNavigation::test_samhia_header_rendered[chromium] PASSED                [ 42%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaNavigation::test_samhia_description_rendered[chromium] PASSED           [ 44%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaDataIngest::test_file_dropzone_visible[chromium] PASSED                 [ 46%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaDataIngest::test_file_input_accepts_csv[chromium] PASSED                [ 48%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaDataIngest::test_reservoir_name_input[chromium] PASSED                  [ 51%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaDataIngest::test_series_name_input[chromium] PASSED                     [ 53%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaDataIngest::test_alpha_selector[chromium] PASSED                        [ 55%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaDataIngest::test_upload_csv_file[chromium] PASSED                       [ 57%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaDataIngest::test_series_summary_displayed_after_upload[chromium] PASSED [ 59%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaAnalysisExecution::test_analyze_button_disabled_without_sufficient_data[chromium] PASSED [ 61%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaAnalysisExecution::test_analyze_button_enabled_with_data[chromium] PASSED [ 63%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaAnalysisExecution::test_analyze_button_shows_loading[chromium] PASSED   [ 65%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaAnalysisExecution::test_error_message_for_insufficient_data[chromium] PASSED [ 67%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaResultsDisplay::test_results_tabs_visible_after_analysis[chromium] PASSED [ 69%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaResultsDisplay::test_descriptive_stats_panel[chromium] PASSED           [ 71%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaResultsDisplay::test_independence_tab_content[chromium] PASSED          [ 73%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaResultsDisplay::test_verdict_pills_displayed[chromium] PASSED           [ 75%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaPdfGeneration::test_pdf_section_visible[chromium] PASSED                [ 77%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaPdfGeneration::test_pdf_button_disabled_without_data[chromium] PASSED   [ 79%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaPdfGeneration::test_pdf_button_enabled_with_data[chromium] PASSED       [ 81%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaPdfGeneration::test_pdf_generation_loading_state[chromium] PASSED       [ 83%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaPdfGeneration::test_download_button_appears_after_generation[chromium] PASSED [ 85%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaCompleteWorkflow::test_complete_analysis_workflow[chromium] PASSED      [ 87%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaCompleteWorkflow::test_data_preserved_when_scrolling[chromium] PASSED   [ 89%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaEdgeCases::test_invalid_file_format[chromium] PASSED                    [ 91%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaEdgeCases::test_empty_csv_file[chromium] PASSED                         [ 93%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaEdgeCases::test_csv_with_missing_values[chromium] PASSED                [ 95%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaEdgeCases::test_very_long_series_name[chromium] PASSED                  [ 97%]
+tests/e2e/test_ui_samhia.py::TestUISamhiaEdgeCases::test_special_characters_in_names[chromium] PASSED            [100%]
+
+================================================= 49 passed in 28.88s =================================================

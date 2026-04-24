@@ -27,6 +27,7 @@ from core.reporting.styles import (
     HYDROLOGICAL_ORDER,
     METIS_BLUE,
     METIS_DARK_BLUE,
+    METIS_GRAY,
     METIS_RED,
     MONTH_NAMES,
     get_y_range,
@@ -323,56 +324,139 @@ def generate_samhia_report_pdf(  # noqa: C901, PLR0912, PLR0915
         pdf.savefig(fig)
         plt.close(fig)
 
-        # PÁGINA 3: RESUMEN ESTADÍSTICO Y OUTLIERS
+        # PÁGINA 3: RESUMEN ESTADÍSTICO Y OUTLIERS CON FDP
         fig = plt.figure(figsize=DEFAULT_PDF_CONFIG.figsize_pdf)
-        ax = fig.add_subplot(111)
-        ax.set_axis_off()
-        ax.set_title("Resumen Estadístico Descriptivo", fontsize=12, loc="left", pad=10)
+        gs = fig.add_gridspec(2, 2, height_ratios=[0.6, 0.4], hspace=0.3, wspace=0.3)
+
+        # Subplot 1: Tabla de estadísticas descriptivas
+        ax1 = fig.add_subplot(gs[0, 0])
+        ax1.set_axis_off()
+        ax1.set_title(
+            "Resumen Estadístico Descriptivo", fontsize=11, loc="left", pad=10
+        )
 
         col_labels = list(combined_stat_table.columns)
         cell_text = [
             [str(r["Estadística"]), str(r["Valor"])]
             for _, r in combined_stat_table.iterrows()
         ]
-        tbl = ax.table(
+        tbl = ax1.table(
             cellText=cell_text,
             colLabels=col_labels,
             cellLoc="center",
-            loc="upper left",
-            bbox=[0, 0.45, 0.45, 0.55],
+            loc="center",
+            bbox=[0, 0, 1, 1],
         )
         tbl.auto_set_font_size(False)  # noqa: FBT003
         tbl.set_fontsize(DEFAULT_PDF_CONFIG.table_fontsize)
 
+        # Subplot 2: Gráfico FDP (Función de Densidad de Probabilidad)
+        ax2 = fig.add_subplot(gs[0, 1])
+        ax2.set_title(
+            "Función de Densidad de Probabilidad (FDP)",
+            fontsize=11,
+            loc="center",
+            pad=10,
+        )
+
+        # Generar FDP inline para el PDF
+        values = variable_calc
+        kde = stats.gaussian_kde(values)
+        x_range = np.linspace(values.min() * 0.9, values.max() * 1.1, 500)
+        kde_values = kde(x_range)
+
+        # Histograma
+        ax2.hist(
+            values,
+            bins="auto",
+            density=True,
+            alpha=0.5,
+            color="grey",
+            edgecolor="white",
+            label="Histograma",
+        )
+
+        # Curva KDE
+        ax2.plot(
+            x_range, kde_values, color=METIS_BLUE, linewidth=2.5, label="Densidad KDE"
+        )
+
+        # Límites Kn
+        ax2.axvline(
+            limite_superior,
+            color=METIS_RED,
+            linestyle="--",
+            linewidth=2,
+            label=f"Límite Sup ({limite_superior:.2f})",
+        )
+        ax2.axvline(
+            limite_inferior,
+            color=METIS_RED,
+            linestyle="--",
+            linewidth=2,
+            label=f"Límite Inf ({limite_inferior:.2f})",
+        )
+
+        # Marcar outliers en la curva
         if not outliers_df.empty:
-            display_df = outliers_df.head(20)[["date", config.series_name]].copy()
+            outlier_vals = outliers_df[config.series_name].to_numpy()
+            outlier_densities = kde(outlier_vals)
+            ax2.scatter(
+                outlier_vals,
+                outlier_densities,
+                color=METIS_RED,
+                s=60,
+                zorder=5,
+                marker="X",
+                edgecolors="white",
+                label=f"Outliers ({len(outlier_vals)})",
+            )
+
+        ax2.set_xlabel("Valor")
+        ax2.set_ylabel("Densidad de probabilidad")
+        ax2.legend(loc="upper left", fontsize=8)
+        ax2.grid(visible=True, alpha=0.3, linestyle="--")
+
+        # Subplot 3: Tabla de outliers (spanning bottom row)
+        ax3 = fig.add_subplot(gs[1, :])
+        ax3.set_axis_off()
+
+        if not outliers_df.empty:
+            display_df = outliers_df.head(15)[["date", config.series_name]].copy()
             display_df["date"] = display_df["date"].dt.strftime("%Y-%m-%d")
             display_df = display_df.round(4)
-            ax.text(
+            ax3.text(
                 0.5,
-                0.98,
-                "Datos Atípicos (primeros 20):",
-                transform=ax.transAxes,
+                0.95,
+                (
+                    f"Datos Atípicos Detectados ({len(outliers_df)} "
+                    f"total, mostrando primeros 15):"
+                ),
+                transform=ax3.transAxes,
                 fontsize=10,
                 va="top",
+                ha="center",
             )
-            tbl2 = ax.table(
+            tbl2 = ax3.table(
                 cellText=display_df.to_numpy().tolist(),
-                colLabels=list(display_df.columns),
+                colLabels=["Fecha", config.series_name],
                 cellLoc="center",
-                loc="upper right",
-                bbox=[0.5, 0.45, 0.48, 0.50],
+                loc="center",
+                bbox=[0.1, 0, 0.8, 0.85],
             )
             tbl2.auto_set_font_size(False)  # noqa: FBT003
-            tbl2.set_fontsize(8)
+            tbl2.set_fontsize(9)
         else:
-            ax.text(
+            ax3.text(
                 0.5,
-                0.6,
+                0.5,
                 "Sin Datos Atípicos detectados bajo criterio normal.",
-                transform=ax.transAxes,
-                fontsize=10,
+                transform=ax3.transAxes,
+                fontsize=11,
                 ha="center",
+                va="center",
+                style="italic",
+                color=METIS_GRAY,
             )
 
         pdf.savefig(fig)

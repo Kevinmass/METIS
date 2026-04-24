@@ -14,6 +14,7 @@ mpl.use("Agg")
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from scipy import stats
+from scipy.stats import gaussian_kde
 
 from core.reporting.styles import (
     COLOR_BOXPLOT_BLUE,
@@ -28,6 +29,8 @@ from core.reporting.styles import (
     HYDROLOGICAL_LABELS,
     HYDROLOGICAL_ORDER,
     METIS_BLUE,
+    METIS_GRAY,
+    METIS_GREEN,
     METIS_RED,
     MONTH_NAMES,
     apply_metis_style,
@@ -736,6 +739,179 @@ def plot_probability_plot(  # noqa: C901, PLR0913, PLR0915
         y_min = sorted_values[0] * 0.8 if sorted_values[0] > 0 else 0.1
         y_max = sorted_values[-1] * 1.2
         ax.set_ylim(y_min, y_max)
+
+    apply_metis_style(fig)
+    plt.tight_layout()
+
+    if output_path:
+        fig.savefig(output_path, dpi=DEFAULT_FIGURE_CONFIG.dpi, bbox_inches="tight")
+
+    return fig
+
+
+def plot_fdp(  # noqa: PLR0913 - 6 args needed for flexibility
+    series: pd.Series,
+    lower_limit: float | None = None,
+    upper_limit: float | None = None,
+    outliers_indices: list[int] | None = None,
+    y_label: str | None = None,
+    output_path: str | None = None,
+) -> plt.Figure:
+    """Genera gráfico de Función de Densidad de Probabilidad (FDP/KDE).
+
+    Muestra la distribución de los datos mediante Kernel Density Estimate (KDE)
+    con histograma superpuesto. Incluye líneas verticales para los límites Kn
+    y destaca visualmente los outliers detectados.
+
+    Args:
+        series: Serie temporal de valores numéricos.
+        lower_limit: Límite inferior calculado con Kn (opcional).
+        upper_limit: Límite superior calculado con Kn (opcional).
+        outliers_indices: Índices de los outliers detectados (opcional).
+        y_label: Etiqueta para el eje X (descripción de la variable).
+        output_path: Si proporcionado, guarda el gráfico en esta ruta.
+
+    Returns:
+        Figura matplotlib.
+    """
+    values = series.dropna().to_numpy()
+    n = len(values)
+
+    # Calcular estadísticos
+    media_val = float(np.mean(values))
+    sd_val = float(np.std(values, ddof=1))
+
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_CONFIG.figsize)
+
+    # Histograma con normalización de densidad
+    _counts, _bins, _patches = ax.hist(
+        values,
+        bins="auto",
+        density=True,
+        alpha=DEFAULT_PLOT_STYLE.alpha_fill,
+        color=COLOR_FILL,
+        edgecolor="white",
+        label="Histograma",
+    )
+
+    # KDE (Kernel Density Estimate)
+    kde = gaussian_kde(values)
+    x_range = np.linspace(values.min() * 0.9, values.max() * 1.1, 500)
+    kde_values = kde(x_range)
+    ax.plot(
+        x_range,
+        kde_values,
+        color=METIS_BLUE,
+        linewidth=2.5,
+        label="Densidad KDE",
+        zorder=3,
+    )
+
+    # Curva teórica Log-Normal (basada en los parámetros de los datos)
+    if np.all(values > 0):
+        log_values = np.log(values)
+        mu = np.mean(log_values)
+        sigma = np.std(log_values, ddof=1)
+        theoretical_lognormal = stats.lognorm.pdf(x_range, s=sigma, scale=np.exp(mu))
+        ax.plot(
+            x_range,
+            theoretical_lognormal,
+            color=METIS_GREEN,
+            linestyle="--",
+            linewidth=2,
+            label="Log-Normal teórica",
+            zorder=2,
+            alpha=0.8,
+        )
+
+    # Líneas verticales para límites Kn
+    if lower_limit is not None:
+        ax.axvline(
+            lower_limit,
+            color=METIS_RED,
+            linestyle="--",
+            linewidth=2,
+            zorder=4,
+            label=f"Límite Kn Inf ({lower_limit:.2f})",
+        )
+        # Sombrear área de rechazo inferior
+        ax.fill_betweenx(
+            [0, ax.get_ylim()[1] * 1.1],
+            values.min() * 0.9,
+            lower_limit,
+            alpha=0.15,
+            color=METIS_RED,
+            zorder=1,
+        )
+
+    if upper_limit is not None:
+        ax.axvline(
+            upper_limit,
+            color=METIS_RED,
+            linestyle="--",
+            linewidth=2,
+            zorder=4,
+            label=f"Límite Kn Sup ({upper_limit:.2f})",
+        )
+        # Sombrear área de rechazo superior
+        ax.fill_betweenx(
+            [0, ax.get_ylim()[1] * 1.1],
+            upper_limit,
+            values.max() * 1.1,
+            alpha=0.15,
+            color=METIS_RED,
+            zorder=1,
+        )
+
+    # Marcar valores atípicos en la curva de densidad
+    if outliers_indices and len(outliers_indices) > 0:
+        outlier_values = values[outliers_indices]
+        outlier_densities = kde(outlier_values)
+        ax.scatter(
+            outlier_values,
+            outlier_densities,
+            color=METIS_RED,
+            s=80,
+            zorder=5,
+            marker="X",
+            edgecolors="white",
+            linewidths=1.5,
+            label=f"Outliers ({len(outliers_indices)})",
+        )
+
+    # Anotar estadísticos clave
+
+    stats_text = f"μ = {media_val:.2f}\nσ = {sd_val:.2f}\nn = {n}"  # noqa: RUF001
+    ax.text(
+        0.97,
+        0.97,
+        stats_text,
+        transform=ax.transAxes,
+        fontsize=9,
+        verticalalignment="top",
+        horizontalalignment="right",
+        bbox={
+            "boxstyle": "round,pad=0.3",
+            "facecolor": "white",
+            "alpha": 0.8,
+            "edgecolor": METIS_GRAY,
+        },
+    )
+
+    ax.set_title(
+        "Función de Densidad de Probabilidad (FDP)",
+        fontsize=DEFAULT_PLOT_STYLE.title_fontsize,
+    )
+    ax.set_xlabel(
+        y_label or "Valor",
+        fontsize=DEFAULT_PLOT_STYLE.label_fontsize,
+    )
+    ax.set_ylabel(
+        "Densidad de probabilidad",
+        fontsize=DEFAULT_PLOT_STYLE.label_fontsize,
+    )
+
+    ax.legend(loc="upper left", fontsize=9)
 
     apply_metis_style(fig)
     plt.tight_layout()

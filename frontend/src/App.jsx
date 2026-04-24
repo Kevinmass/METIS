@@ -25,6 +25,7 @@
 
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import { OutliersPanel } from "./Samhia.jsx";
 
 // =============================================================================
 // CONSTANTES DE CONFIGURACIÓN
@@ -261,6 +262,9 @@ export default function App() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [pdfError, setPdfError] = useState("");
   const [activeSamhiaTab, setActiveSamhiaTab] = useState("analysis");
+  const [outlierPlots, setOutlierPlots] = useState(null);
+  const [outlierPlotsLoading, setOutlierPlotsLoading] = useState(false);
+  const [outlierPlotsError, setOutlierPlotsError] = useState("");
 
   // ---------------------------------------------------------------------------
   // MEMOIZACIÓN DE CÁLCULOS
@@ -501,6 +505,45 @@ export default function App() {
       );
     } finally {
       setIsGeneratingPdf(false);
+    }
+  };
+
+  /**
+   * Carga los gráficos de análisis de outliers.
+   */
+  const handleLoadOutlierPlots = async () => {
+    setOutlierPlotsLoading(true);
+    setOutlierPlotsError("");
+
+    try {
+      const validData = series.filter((v) => Number.isFinite(v));
+      const analysisDates = dates.length === validData.length
+        ? dates
+        : validData.map((_, i) => `2020-${String((i % 12) + 1).padStart(2, '0')}-15`);
+
+      const response = await fetch(`${API_BASE}/reports/plots/outliers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data: validData,
+          dates: analysisDates,
+          series_name: seriesName,
+          reservoir_name: reservoirName,
+          alpha: alpha,
+          distribution: "lognormal",
+        }),
+      });
+
+      const json = await response.json();
+      if (!response.ok) {
+        setOutlierPlotsError(json.detail || "Error al cargar gráficos de outliers");
+      } else {
+        setOutlierPlots(json);
+      }
+    } catch (error) {
+      setOutlierPlotsError("No se pudieron cargar los gráficos de outliers");
+    } finally {
+      setOutlierPlotsLoading(false);
     }
   };
 
@@ -898,10 +941,12 @@ export default function App() {
               />
             )}
             {activeSamhiaTab === "outliers" && (
-              <TestResultsPanel
-                title="Detección de Atípicos"
+              <OutliersPanel
                 tests={analysisResults.outliers}
-                description="Identificación de valores atípicos y puntos de ruptura."
+                plots={outlierPlots}
+                plotsLoading={outlierPlotsLoading}
+                plotsError={outlierPlotsError}
+                onLoadPlots={handleLoadOutlierPlots}
               />
             )}
           </div>
