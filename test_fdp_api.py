@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Test script to verify FDP plot is returned by API."""
 
 # Simular la respuesta del endpoint para verificar estructura
