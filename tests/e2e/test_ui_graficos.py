@@ -18,7 +18,8 @@ def test_ui_graficos_completos(page: Page):
 
     Escenario:
         1. Usuario carga serie completa (36 valores)
-        2. Sistema renderiza gráficos de dispersión y correlograma
+        2. Completa flujo de importación con preview
+        3. Sistema renderiza gráficos de dispersión y correlograma
 
     Valida:
         - 36 círculos SVG en gráfico de dispersión (uno por dato)
@@ -33,6 +34,14 @@ def test_ui_graficos_completos(page: Page):
 
     # Cargar serie completa
     page.set_input_files("input[type='file']", "tests/fixtures/series_referencia_1.csv")
+
+    # Esperar preview y completar importación
+    expect(page.locator("text=Preview:")).to_be_visible()
+    page.get_by_role("button", name="Importar datos").click()
+
+    # Esperar paso de procesamiento y continuar
+    expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
+    page.get_by_role("button", name="Continuar al análisis").click()
 
     # Verificar dispersión
     expect(page.locator("circle")).to_have_count(36)

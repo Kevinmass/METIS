@@ -131,6 +131,12 @@ class TestUISamhiaDataIngest:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
+        # Completar flujo de importación (preview -> importar -> procesar -> continuar)
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+
         # Los datos se comparten con la sección SAMHIA
         # Verificar que el botón de análisis SAMHIA está habilitado
         samhia_section = samhia_page.locator(
@@ -157,7 +163,13 @@ class TestUISamhiaDataIngest:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
-        # Verificar resumen en sección SAMHIA
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+
+        # Verificar resumen en sección SAMHIA (ahora muestra 15 datos)
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
         ).first
@@ -196,6 +208,12 @@ class TestUISamhiaAnalysisExecution:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+
         # Verificar botón habilitado en sección SAMHIA
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
@@ -220,6 +238,12 @@ class TestUISamhiaAnalysisExecution:
         ).first
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
+
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
 
         # Clic en analizar en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -275,6 +299,12 @@ class TestUISamhiaResultsDisplay:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+
         # Ejecutar análisis en sección SAMHIA
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
@@ -315,6 +345,12 @@ class TestUISamhiaResultsDisplay:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+
         # Ejecutar análisis en sección SAMHIA
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
@@ -340,6 +376,12 @@ class TestUISamhiaResultsDisplay:
         ).first
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
+
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
 
         # Ejecutar análisis en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -377,6 +419,12 @@ class TestUISamhiaResultsDisplay:
         ).first
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
+
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
 
         # Ejecutar análisis en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -429,6 +477,12 @@ class TestUISamhiaPdfGeneration:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+
         # Verificar botón habilitado en sección SAMHIA
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
@@ -450,6 +504,12 @@ class TestUISamhiaPdfGeneration:
         ).first
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
+
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
 
         # Clic en generar PDF
         samhia_section = samhia_page.locator(
@@ -479,6 +539,12 @@ class TestUISamhiaPdfGeneration:
         ).first
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
+
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
 
         # Esperar a que el archivo se procese y el resumen se actualice
         summary_section = samhia_page.locator(
@@ -532,18 +598,24 @@ class TestUISamhiaCompleteWorkflow:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
+        # 3. Completar flujo de importación (preview -> importar -> procesar)
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+
         # Verificar carga exitosa
         summary_section = samhia_page.locator(
             "section", has_text="Resumen de la serie"
         ).first
         expect(summary_section).to_contain_text("20")
 
-        # 3. Obtener sección SAMHIA
+        # 4. Obtener sección SAMHIA
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
         ).first
 
-        # 4. Configurar parámetros
+        # 5. Configurar parámetros
         samhia_section.locator("input[type='text']").first.fill("Embalse de Prueba")
         samhia_section.locator("input[type='text']").nth(1).fill("Caudal Mensual")
 
@@ -620,6 +692,12 @@ class TestUISamhiaCompleteWorkflow:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+
         # Hacer scroll a otra sección y volver
         samhia_heading = samhia_page.locator("h2", has_text="Análisis SAMHIA")
         samhia_heading.scroll_into_view_if_needed()
@@ -659,9 +737,13 @@ class TestUISamhiaEdgeCases:
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
 
-        # Debería mostrar error
+        # Esperar preview y click en importar
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+
+        # Debería mostrar error después de intentar importar
         expect(
-            ingest_section.locator("text=no contiene valores numéricos")
+            ingest_section.locator("text=No se encontraron valores numéricos")
         ).to_be_visible()
 
     def test_csv_with_missing_values(self, samhia_page: Page, tmp_path):
@@ -678,6 +760,12 @@ class TestUISamhiaEdgeCases:
         ).first
         file_input = ingest_section.locator("input[type='file']")
         file_input.set_input_files(str(csv_file))
+
+        # Completar flujo de importación
+        expect(samhia_page.locator("text=Preview:")).to_be_visible()
+        samhia_page.get_by_role("button", name="Importar datos").click()
+        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
+        samhia_page.get_by_role("button", name="Continuar al análisis").click()
 
         # Debería cargar los datos válidos y mostrar resumen
         summary_section = samhia_page.locator(

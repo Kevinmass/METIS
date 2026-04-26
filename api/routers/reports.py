@@ -98,21 +98,35 @@ def _test_result_to_schema(result) -> TestResultSchema:
 )
 async def analyze_samhia(request: SamhiaAnalysisRequest):
     """Ejecuta análisis estadístico completo y devuelve resultados JSON."""
-    # Crear DataFrame
+    # Crear DataFrame con validación de fechas
     df = pd.DataFrame(
         {
             "date": pd.to_datetime(request.dates, errors="coerce"),
             request.series_name: request.data,
         }
     )
-    df = df[df["date"].notna()].sort_values("date").reset_index(drop=True)
+
+    # Filtrar fechas válidas (no NaT y dentro de rango razonable: 1900-2100)
+    df = df[df["date"].notna()].copy()
+    if len(df) > 0:
+        df = df[
+            (df["date"].dt.year >= 1900) & (df["date"].dt.year <= 2100)  # noqa: PLR2004
+        ].copy()
+
+    if len(df) < 12:  # noqa: PLR2004
+        msg = (
+            f"La serie debe tener al menos 12 datos con fechas válidas. "
+            f"Datos válidos: {len(df)}"
+        )
+        raise HTTPException(status_code=400, detail=msg)
+
+    df = df.sort_values("date").reset_index(drop=True)
 
     series = pd.Series(df[request.series_name].dropna().to_numpy())
 
     if len(series) < 12:  # noqa: PLR2004
-        raise HTTPException(
-            status_code=400, detail="La serie debe tener al menos 12 datos válidos"
-        )
+        msg = "La serie debe tener al menos 12 datos válidos"
+        raise HTTPException(status_code=400, detail=msg)
 
     # Ejecutar tests
     independence_results = {
@@ -204,14 +218,29 @@ async def analyze_samhia(request: SamhiaAnalysisRequest):
 )
 async def generate_pdf(request: PDFGenerationRequest):
     """Genera reporte PDF y devuelve la ruta del archivo."""
-    # Crear DataFrame
+    # Crear DataFrame con validación de fechas
     df = pd.DataFrame(
         {
             "date": pd.to_datetime(request.dates, errors="coerce"),
             request.series_name: request.data,
         }
     )
-    df = df[df["date"].notna()].sort_values("date").reset_index(drop=True)
+
+    # Filtrar fechas válidas (no NaT y dentro de rango razonable: 1900-2100)
+    df = df[df["date"].notna()].copy()
+    if len(df) > 0:
+        df = df[
+            (df["date"].dt.year >= 1900) & (df["date"].dt.year <= 2100)  # noqa: PLR2004
+        ].copy()
+
+    if len(df) < 12:  # noqa: PLR2004
+        msg = (
+            f"La serie debe tener al menos 12 datos con fechas válidas. "
+            f"Datos válidos: {len(df)}"
+        )
+        raise HTTPException(status_code=400, detail=msg)
+
+    df = df.sort_values("date").reset_index(drop=True)
 
     # Configuración del reporte
     config = ReportConfig(
@@ -479,24 +508,40 @@ async def upload_file(
         "Probability Plot, Q-Q Plot y Función de Densidad de Probabilidad (FDP)."
     ),
 )
-async def generate_outlier_plots(request: OutlierPlotRequest):
+async def generate_outlier_plots(  # noqa: PLR0915
+    request: OutlierPlotRequest,
+):
     """Genera gráficos para análisis de outliers con método Kn y Chow."""
 
-    # Crear DataFrame
+    # Crear DataFrame con validación de fechas
     df = pd.DataFrame(
         {
             "date": pd.to_datetime(request.dates, errors="coerce"),
             request.series_name: request.data,
         }
     )
-    df = df[df["date"].notna()].sort_values("date").reset_index(drop=True)
+
+    # Filtrar fechas válidas (no NaT y dentro de rango razonable: 1900-2100)
+    df = df[df["date"].notna()].copy()
+    if len(df) > 0:
+        df = df[
+            (df["date"].dt.year >= 1900) & (df["date"].dt.year <= 2100)  # noqa: PLR2004
+        ].copy()
+
+    if len(df) < 12:  # noqa: PLR2004
+        msg = (
+            f"La serie debe tener al menos 12 datos con fechas válidas. "
+            f"Datos válidos: {len(df)}"
+        )
+        raise HTTPException(status_code=400, detail=msg)
+
+    df = df.sort_values("date").reset_index(drop=True)
 
     series = pd.Series(df[request.series_name].dropna().to_numpy())
 
     if len(series) < 12:  # noqa: PLR2004
-        raise HTTPException(
-            status_code=400, detail="La serie debe tener al menos 12 datos válidos"
-        )
+        msg = "La serie debe tener al menos 12 datos válidos"
+        raise HTTPException(status_code=400, detail=msg)
 
     # Ejecutar test Kn para obtener límites
     kn_result = kn_outlier_detection(series, alpha=request.alpha)

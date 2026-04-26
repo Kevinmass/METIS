@@ -82,9 +82,10 @@ def test_ui_ingesta_csv(page: Page):
 
     Escenario:
         1. Usuario selecciona archivo CSV de fixture
-        2. Sistema carga y parsea automáticamente
-        3. Tabla muestra los valores cargados
-        4. Identificador de serie muestra nombre del archivo
+        2. Sistema muestra preview y selección de columnas
+        3. Usuario confirma importación
+        4. Tabla muestra los valores cargados
+        5. Identificador de serie muestra nombre del archivo
 
     Valida:
         - Cantidad correcta de inputs (36 valores del CSV)
@@ -94,6 +95,16 @@ def test_ui_ingesta_csv(page: Page):
 
     # Simular drag & drop de archivo CSV
     page.set_input_files("input[type='file']", "tests/fixtures/series_referencia_1.csv")
+
+    # Esperar a que aparezca el preview con selectores de columnas
+    expect(page.locator("text=Preview:")).to_be_visible()
+
+    # Click en "Importar datos" (las columnas ya están pre-seleccionadas)
+    page.get_by_role("button", name="Importar datos").click()
+
+    # Esperar paso de procesamiento temporal y continuar
+    expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
+    page.get_by_role("button", name="Continuar al análisis").click()
 
     # Verificar que la serie se cargó
     inputs = page.locator("input[type='number']")
@@ -118,16 +129,22 @@ def test_ui_resultados_semaforo(page: Page):
     """
     page.goto("http://localhost:5173")
 
-    # Scroll a sección SAMHIA
-    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
-    samhia_heading.scroll_into_view_if_needed()
-
-    # Cargar serie de referencia en sección de ingesta
+    # Cargar serie de referencia (nuevo flujo con preview)
     ingest_section = page.locator("section", has_text="Ingesta de datos").first
     file_input = ingest_section.locator("input[type='file']")
     file_input.set_input_files("tests/fixtures/series_referencia_1.csv")
 
-    # Obtener sección SAMHIA y ejecutar análisis
+    # Esperar preview y completar importación
+    expect(page.locator("text=Preview:")).to_be_visible()
+    page.get_by_role("button", name="Importar datos").click()
+
+    # Esperar paso de procesamiento y continuar
+    expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
+    page.get_by_role("button", name="Continuar al análisis").click()
+
+    # Scroll a sección SAMHIA y ejecutar análisis
+    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
+    samhia_heading.scroll_into_view_if_needed()
     samhia_section = page.locator("section", has_text="Análisis SAMHIA").first
     analyze_button = samhia_section.locator(
         "button", has_text="Ejecutar análisis SAMHIA"
@@ -150,7 +167,8 @@ def test_ui_graficos(page: Page):
 
     Escenario:
         1. Usuario carga serie
-        2. Gráficos se renderizan automáticamente
+        2. Completa flujo de importación
+        3. Gráficos se renderizan automáticamente
 
     Valida:
         - Título de dispersión temporal visible
@@ -167,6 +185,14 @@ def test_ui_graficos(page: Page):
 
     # Cargar serie
     page.set_input_files("input[type='file']", "tests/fixtures/series_referencia_1.csv")
+
+    # Esperar preview y completar importación
+    expect(page.locator("text=Preview:")).to_be_visible()
+    page.get_by_role("button", name="Importar datos").click()
+
+    # Esperar paso de procesamiento y continuar
+    expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
+    page.get_by_role("button", name="Continuar al análisis").click()
 
     # Verificar gráfico de dispersión
     expect(page.locator("text=Dispersión temporal")).to_be_visible()

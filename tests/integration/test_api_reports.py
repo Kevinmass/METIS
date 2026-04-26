@@ -232,7 +232,7 @@ class TestPDFEndpoint:
 
         response = client.post("/reports/pdf", json=request_data)
 
-        assert response.status_code == 500
+        assert response.status_code == 400
         assert "12" in response.json()["detail"]
 
 

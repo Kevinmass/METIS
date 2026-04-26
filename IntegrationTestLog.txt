@@ -1,9 +1,41 @@
 PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> python -m pytest tests\integration -q
-..................................................                                                               [100%]
+...............................F..................                                                               [100%]
+====================================================== FAILURES =======================================================
+_________________________________ TestPDFEndpoint.test_generate_pdf_insufficient_data _________________________________
+
+self = <tests.integration.test_api_reports.TestPDFEndpoint object at 0x00000212149775C0>
+client = <starlette.testclient.TestClient object at 0x0000021214B21400>
+temp_output_dir = 'C:\\Users\\kevin\\AppData\\Local\\Temp\\tmp_kxxuso_'
+
+    def test_generate_pdf_insufficient_data(self, client, temp_output_dir):
+        """Rechaza generación con menos de 12 datos."""
+        np.random.seed(42)
+        dates = pd.date_range(start="2020-01-01", periods=5, freq="D")
+        values = np.random.normal(50, 10, 5).tolist()
+        dates_str = [d.isoformat() for d in dates]
+        pdf_path = os.path.join(temp_output_dir, "test_error.pdf")
+
+        request_data = {
+            "series_name": "test_variable",
+            "reservoir_name": "TestReservoir",
+            "data": values,
+            "dates": dates_str,
+            "output_path": pdf_path,
+        }
+
+        response = client.post("/reports/pdf", json=request_data)
+
+>       assert response.status_code == 500
+E       assert 400 == 500
+E        +  where 400 = <Response [400 Bad Request]>.status_code
+
+tests\integration\test_api_reports.py:235: AssertionError
 ================================================== warnings summary ===================================================
 ..\..\..\..\..\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\formparsers.py:10
   C:\Users\kevin\AppData\Local\Programs\Python\Python313\Lib\site-packages\starlette\formparsers.py:10: PendingDeprecationWarning: Please use `import python_multipart` instead.
     import multipart
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-50 passed, 1 warning in 4.80s
+=============================================== short test summary info ===============================================
+FAILED tests/integration/test_api_reports.py::TestPDFEndpoint::test_generate_pdf_insufficient_data - assert 400 == 500
+1 failed, 49 passed, 1 warning in 4.90s

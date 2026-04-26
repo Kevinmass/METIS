@@ -133,6 +133,307 @@ function parseExcel(buffer) {
 }
 
 // =============================================================================
+// FUNCIONES DE PARSING AVANZADO - PREVIEW Y SELECCIÓN DE COLUMNAS
+// =============================================================================
+
+/**
+ * Detecta el tipo de una columna basándose en sus valores.
+ *
+ * @param {Array} values - Valores de la columna
+ * @returns {string} Tipo detectado: 'date', 'numeric', 'text'
+ */
+function detectColumnType(values) {
+  const nonNullValues = values.filter((v) => v !== null && v !== undefined && v !== "");
+  if (nonNullValues.length === 0) return "text";
+
+  // Verificar si es fecha
+  const datePattern = /^(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4}|\d{1,2}[-/]\d{1,2}[-/]\d{2})$/;
+  const dateCandidates = nonNullValues.filter((v) => {
+    const str = String(v).trim();
+    return datePattern.test(str) || !Number.isNaN(Date.parse(str));
+  });
+  if (dateCandidates.length >= nonNullValues.length * 0.5) return "date";
+
+  // Verificar si es numérica
+  const numericCandidates = nonNullValues.filter((v) => !Number.isNaN(Number(v)));
+  if (numericCandidates.length >= nonNullValues.length * 0.5) return "numeric";
+
+  return "text";
+}
+
+/**
+ * Parsea CSV y retorna preview con headers y tipos de columnas.
+ *
+ * @param {string} text - Contenido del archivo CSV
+ * @param {number} maxRows - Máximo de filas para preview
+ * @returns {Object} Preview con headers, filas, tipos y sheetNames
+ */
+function parseCsvPreview(text, maxRows = 5) {
+  const lines = text
+    .trim()
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "");
+
+  if (lines.length === 0) {
+    return { headers: [], rows: [], columnTypes: [], sheetNames: [] };
+  }
+
+  // Detectar separador
+  const firstLine = lines[0];
+  const separator = firstLine.includes(";") ? ";" : ",";
+
+  // Detectar si tiene headers (primera fila contiene texto no numérico)
+  const firstRow = firstLine.split(separator).map((c) => c.trim());
+  const hasHeaders = firstRow.some((cell) => {
+    const num = Number(cell);
+    return Number.isNaN(num) || String(cell).match(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ_]/);
+  });
+
+  const headers = hasHeaders ? firstRow : firstRow.map((_, i) => `Col ${i + 1}`);
+  const dataStartIndex = hasHeaders ? 1 : 0;
+
+  // Parsear filas de datos
+  const rows = lines
+    .slice(dataStartIndex, dataStartIndex + maxRows)
+    .map((line) => line.split(separator).map((c) => c.trim()));
+
+  // Detectar tipos de columnas
+  const allDataRows = lines.slice(dataStartIndex).map((line) => line.split(separator).map((c) => c.trim()));
+  const columnTypes = headers.map((_, colIndex) => {
+    const columnValues = allDataRows.map((row) => row[colIndex]).filter((v) => v !== undefined);
+    return detectColumnType(columnValues);
+  });
+
+  return { headers, rows, columnTypes, sheetNames: [], hasHeaders };
+}
+
+/**
+ * Parsea Excel y retorna preview con headers, tipos y nombres de hojas.
+ *
+ * @param {ArrayBuffer} buffer - Buffer del archivo Excel
+ * @param {number} maxRows - Máximo de filas para preview
+ * @returns {Object} Preview con headers, filas, tipos y sheetNames
+ */
+function parseExcelPreview(buffer, maxRows = 5) {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetNames = workbook.SheetNames;
+
+  if (sheetNames.length === 0) {
+    return { headers: [], rows: [], columnTypes: [], sheetNames: [] };
+  }
+
+  const worksheet = workbook.Sheets[sheetNames[0]];
+  const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+
+  if (rawData.length === 0) {
+    return { headers: [], rows: [], columnTypes: [], sheetNames: [] };
+  }
+
+  // Detectar headers
+  const firstRow = rawData[0];
+  const hasHeaders = firstRow.some((cell) => {
+    if (cell === "" || cell === null || cell === undefined) return false;
+    const str = String(cell).trim();
+    const num = Number(str);
+    return Number.isNaN(num) || str.match(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ_]/);
+  });
+
+  const headers = hasHeaders ? firstRow.map(String) : firstRow.map((_, i) => `Col ${i + 1}`);
+  const dataStartIndex = hasHeaders ? 1 : 0;
+
+  // Obtener preview de filas
+  const rows = rawData.slice(dataStartIndex, dataStartIndex + maxRows).map((row) =>
+    headers.map((_, i) => (row[i] !== undefined ? String(row[i]) : ""))
+  );
+
+  // Detectar tipos de columnas usando todas las filas
+  const allDataRows = rawData.slice(dataStartIndex);
+  const columnTypes = headers.map((_, colIndex) => {
+    const columnValues = allDataRows.map((row) => row[colIndex]).filter((v) => v !== "" && v !== undefined && v !== null);
+    return detectColumnType(columnValues);
+  });
+
+  return { headers, rows, columnTypes, sheetNames, hasHeaders };
+}
+
+/**
+ * Normaliza una fecha a formato ISO 8601 (YYYY-MM-DD).
+ * Soporta múltiples formatos de entrada comunes en CSV argentinos.
+ *
+ * @param {string} dateStr - Fecha en cualquier formato soportado
+ * @returns {string} Fecha en formato YYYY-MM-DD
+ */
+function normalizeDate(dateStr) {
+  if (!dateStr || typeof dateStr !== "string") return "";
+
+  const str = dateStr.trim();
+
+  // Formato ISO: 2020-01-01 o 2020-01
+  if (str.match(/^\d{4}-\d{2}(-\d{2})?$/)) {
+    return str.length === 7 ? `${str}-01` : str;
+  }
+
+  // Formato año-mes corto: 2020-1
+  if (str.match(/^\d{4}-\d{1}$/)) {
+    return `${str}-01`;
+  }
+
+  // Formato mes/año: 01/2020 o 1/2020
+  const mesAnioMatch = str.match(/^(\d{1,2})[/-](\d{4})$/);
+  if (mesAnioMatch) {
+    const [, mes, anio] = mesAnioMatch;
+    return `${anio}-${mes.padStart(2, "0")}-01`;
+  }
+
+  // Formato mes/año corto: 01/20 o 1/20
+  const mesAnioCortoMatch = str.match(/^(\d{1,2})[/-](\d{2})$/);
+  if (mesAnioCortoMatch) {
+    const [, mes, anio] = mesAnioCortoMatch;
+    const anioCompleto = parseInt(anio) >= 50 ? `19${anio}` : `20${anio}`;
+    return `${anioCompleto}-${mes.padStart(2, "0")}-01`;
+  }
+
+  // Formato dia/mes/año: 15/01/2020 o 15/1/2020
+  const fechaCompletaMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (fechaCompletaMatch) {
+    const [, dia, mes, anio] = fechaCompletaMatch;
+    return `${anio}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`;
+  }
+
+  // Formato dia/mes/año corto: 15/01/20
+  const fechaCortaMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$/);
+  if (fechaCortaMatch) {
+    const [, dia, mes, anio] = fechaCortaMatch;
+    const anioCompleto = parseInt(anio) >= 50 ? `19${anio}` : `20${anio}`;
+    return `${anioCompleto}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`;
+  }
+
+  // Formato mes abreviado en inglés + año: Jan-00, Feb-01, Jun-2000
+  // Común en datos climáticos e hidrológicos (IMERG, TRMM, etc.)
+  const mesAbbrMatch = str.match(/^([A-Za-z]{3})-(\d{2,4})$/);
+  if (mesAbbrMatch) {
+    const mesesAbbr = {
+      jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+      jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12
+    };
+    const [, mesAbbr, anio] = mesAbbrMatch;
+    const mesNum = mesesAbbr[mesAbbr.toLowerCase()];
+    if (mesNum) {
+      // Determinar año completo
+      let anioCompleto;
+      if (anio.length === 4) {
+        anioCompleto = anio;
+      } else {
+        const anioNum = parseInt(anio);
+        // Asumir 2000+ para años 00-49, 1900+ para 50-99
+        anioCompleto = anioNum >= 50 ? `19${anio}` : `20${anio}`;
+      }
+      return `${anioCompleto}-${String(mesNum).padStart(2, "0")}-01`;
+    }
+  }
+
+  // Si no coincide con ningún formato conocido, devolver como está
+  // y dejar que el backend intente parsear
+  return str;
+}
+
+/**
+ * Extrae datos completos de CSV con fechas normalizadas.
+ *
+ * @param {string} text - Contenido CSV
+ * @param {string} dateColumn - Nombre de columna de fechas
+ * @param {string} valueColumn - Nombre de columna de valores
+ * @param {Object} previewInfo - Info del preview (headers, hasHeaders)
+ * @returns {Object} Objeto con fechas normalizadas y valores
+ */
+function extractCsvData(text, dateColumn, valueColumn, previewInfo) {
+  const lines = text
+    .trim()
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "");
+
+  const separator = lines[0].includes(";") ? ";" : ",";
+  const dataStartIndex = previewInfo.hasHeaders ? 1 : 0;
+
+  const dateColIndex = previewInfo.headers.indexOf(dateColumn);
+  const valueColIndex = previewInfo.headers.indexOf(valueColumn);
+
+  const dataRows = lines.slice(dataStartIndex);
+  const dates = [];
+  const values = [];
+
+  for (const line of dataRows) {
+    const cells = line.split(separator).map((c) => c.trim());
+    const dateVal = cells[dateColIndex];
+    const valueVal = cells[valueColIndex];
+
+    if (dateVal && valueVal !== undefined && valueVal !== "") {
+      const numValue = Number(valueVal);
+      if (!Number.isNaN(numValue)) {
+        // Normalizar la fecha antes de guardar
+        const normalizedDate = normalizeDate(dateVal);
+        if (normalizedDate) {
+          dates.push(normalizedDate);
+          values.push(numValue);
+        }
+      }
+    }
+  }
+
+  return { dates, values };
+}
+
+/**
+ * Extrae datos completos de Excel con fechas normalizadas.
+ *
+ * @param {ArrayBuffer} buffer - Buffer Excel
+ * @param {string} dateColumn - Nombre de columna de fechas
+ * @param {string} valueColumn - Nombre de columna de valores
+ * @param {Object} previewInfo - Info del preview
+ * @param {number} sheetIndex - Índice de la hoja a usar
+ * @returns {Object} Objeto con fechas normalizadas y valores
+ */
+function extractExcelData(buffer, dateColumn, valueColumn, previewInfo, sheetIndex = 0) {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheetName = previewInfo.sheetNames[sheetIndex] || workbook.SheetNames[sheetIndex];
+  const worksheet = workbook.Sheets[sheetName];
+  const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+
+  const dataStartIndex = previewInfo.hasHeaders ? 1 : 0;
+  const dateColIndex = previewInfo.headers.indexOf(dateColumn);
+  const valueColIndex = previewInfo.headers.indexOf(valueColumn);
+
+  const dates = [];
+  const values = [];
+
+  for (let i = dataStartIndex; i < rawData.length; i++) {
+    const row = rawData[i];
+    const dateVal = row[dateColIndex];
+    const valueVal = row[valueColIndex];
+
+    if (dateVal !== "" && valueVal !== "" && valueVal !== undefined) {
+      const numValue = Number(valueVal);
+      if (!Number.isNaN(numValue)) {
+        // Para Excel, si ya es un objeto Date, convertir a ISO
+        // Si es string, normalizar
+        let normalizedDate;
+        if (dateVal instanceof Date) {
+          normalizedDate = dateVal.toISOString().split("T")[0];
+        } else {
+          normalizedDate = normalizeDate(String(dateVal));
+        }
+        if (normalizedDate) {
+          dates.push(normalizedDate);
+          values.push(numValue);
+        }
+      }
+    }
+  }
+
+  return { dates, values };
+}
+
+// =============================================================================
 // FUNCIONES DE VALIDACIÓN Y CÁLCULO
 // =============================================================================
 
@@ -265,6 +566,30 @@ export default function App() {
   const [outlierPlots, setOutlierPlots] = useState(null);
   const [outlierPlotsLoading, setOutlierPlotsLoading] = useState(false);
   const [outlierPlotsError, setOutlierPlotsError] = useState("");
+
+  // ---------------------------------------------------------------------------
+  // ESTADO - IMPORTACIÓN CSV/EXCEL CON SELECCIÓN DE COLUMNAS
+  // ---------------------------------------------------------------------------
+
+  const [importStep, setImportStep] = useState("upload"); // 'upload' | 'preview' | 'select' | 'process' | 'done'
+  const [filePreview, setFilePreview] = useState(null); // { headers, rows, columnTypes, sheetNames, hasHeaders }
+  const [selectedDateColumn, setSelectedDateColumn] = useState("");
+  const [selectedValueColumn, setSelectedValueColumn] = useState("");
+  const [selectedSheet, setSelectedSheet] = useState(0);
+  const [rawFileContent, setRawFileContent] = useState(null); // { type: 'csv'|'excel', content: text|buffer }
+
+  // ---------------------------------------------------------------------------
+  // ESTADO - PROCESAMIENTO TEMPORAL
+  // ---------------------------------------------------------------------------
+
+  const [temporalProcessingEnabled, setTemporalProcessingEnabled] = useState(false);
+  const [temporalAggregationMethod, setTemporalAggregationMethod] = useState("sum");
+  const [temporalHydrologicalYear, setTemporalHydrologicalYear] = useState(false);
+  const [temporalHydrologicalStartMonth, setTemporalHydrologicalStartMonth] = useState(10);
+  const [temporalProcessingLoading, setTemporalProcessingLoading] = useState(false);
+  const [temporalProcessingError, setTemporalProcessingError] = useState("");
+  const [temporalProcessingResult, setTemporalProcessingResult] = useState(null);
+  const [originalSeries, setOriginalSeries] = useState(null); // Guardar serie original antes de procesar
 
   // ---------------------------------------------------------------------------
   // MEMOIZACIÓN DE CÁLCULOS
@@ -577,10 +902,10 @@ export default function App() {
   };
 
   /**
-   * Procesa archivo CSV o Excel cargado.
+   * Procesa archivo CSV o Excel cargado - Paso 1: Preview.
    *
-   * Detecta formato por extensión, parsea contenido y actualiza
-   * estados 'series' y 'seriesId'.
+   * Detecta formato por extensión, carga preview y muestra
+   * la interfaz de selección de columnas.
    *
    * @param {File} file - Archivo seleccionado vía input o drag-drop
    */
@@ -596,31 +921,177 @@ export default function App() {
       return;
     }
 
-    if (file.name.endsWith(".csv")) {
-      const text = await file.text();
-      const parsed = parseCsv(text);
-      if (parsed.length === 0) {
-        setFileError("El archivo no contiene valores numéricos válidos.");
+    try {
+      if (file.name.endsWith(".csv")) {
+        const text = await file.text();
+        const preview = parseCsvPreview(text, 5);
+
+        if (preview.headers.length === 0) {
+          setFileError("El archivo está vacío o no tiene formato válido.");
+          return;
+        }
+
+        // Guardar contenido raw y preview
+        setRawFileContent({ type: "csv", content: text });
+        setFilePreview(preview);
+
+        // Sugerir columnas por defecto
+        const dateCol = preview.headers.find((h, i) => preview.columnTypes[i] === "date") || preview.headers[0];
+        const valueCol = preview.headers.find((h, i) => preview.columnTypes[i] === "numeric") || preview.headers[1] || preview.headers[0];
+        setSelectedDateColumn(dateCol);
+        setSelectedValueColumn(valueCol);
+
+        setSeriesId(file.name);
+        setImportStep("preview");
         return;
       }
-      setSeries(parsed);
-      setSeriesId(file.name);
+
+      if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+        const buffer = await file.arrayBuffer();
+        const preview = parseExcelPreview(buffer, 5);
+
+        if (preview.headers.length === 0) {
+          setFileError("El archivo está vacío o no tiene formato válido.");
+          return;
+        }
+
+        // Guardar contenido raw y preview
+        setRawFileContent({ type: "excel", content: buffer });
+        setFilePreview(preview);
+        setSelectedSheet(0);
+
+        // Sugerir columnas por defecto
+        const dateCol = preview.headers.find((h, i) => preview.columnTypes[i] === "date") || preview.headers[0];
+        const valueCol = preview.headers.find((h, i) => preview.columnTypes[i] === "numeric") || preview.headers[1] || preview.headers[0];
+        setSelectedDateColumn(dateCol);
+        setSelectedValueColumn(valueCol);
+
+        setSeriesId(file.name);
+        setImportStep("preview");
+        return;
+      }
+
+      setFileError("Formato de archivo no compatible.");
+    } catch (error) {
+      setFileError(`Error al procesar el archivo: ${error.message}`);
+    }
+  };
+
+  /**
+   * Cancela la importación y vuelve al estado inicial.
+   */
+  const handleCancelImport = () => {
+    setImportStep("upload");
+    setFilePreview(null);
+    setRawFileContent(null);
+    setSelectedDateColumn("");
+    setSelectedValueColumn("");
+    setSelectedSheet(0);
+  };
+
+  /**
+   * Importa los datos con las columnas seleccionadas.
+   * Va al paso de procesamiento temporal antes de "done".
+   */
+  const handleImport = () => {
+    if (!rawFileContent || !filePreview) return;
+
+    try {
+      let result;
+
+      if (rawFileContent.type === "csv") {
+        result = extractCsvData(rawFileContent.content, selectedDateColumn, selectedValueColumn, filePreview);
+      } else {
+        result = extractExcelData(rawFileContent.content, selectedDateColumn, selectedValueColumn, filePreview, selectedSheet);
+      }
+
+      if (result.values.length === 0) {
+        setFileError("No se encontraron valores numéricos válidos en las columnas seleccionadas.");
+        return;
+      }
+
+      // Guardar datos originales
+      setOriginalSeries({ values: result.values, dates: result.dates });
+      setSeries(result.values);
+      setDates(result.dates);
+
+      // Resetear estado de procesamiento temporal
+      setTemporalProcessingEnabled(false);
+      setTemporalProcessingResult(null);
+      setTemporalProcessingError("");
+
+      // Ir al paso de procesamiento temporal
+      setImportStep("process");
+    } catch (error) {
+      setFileError(`Error al importar datos: ${error.message}`);
+    }
+  };
+
+  /**
+   * Ejecuta procesamiento temporal (agregación a anual).
+   */
+  const handleTemporalProcessing = async () => {
+    setTemporalProcessingError("");
+    setTemporalProcessingResult(null);
+
+    if (!dates.length || !series.length) {
+      setTemporalProcessingError("No hay datos para procesar.");
       return;
     }
 
-    if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
-      const buffer = await file.arrayBuffer();
-      const parsed = parseExcel(buffer);
-      if (parsed.length === 0) {
-        setFileError("El archivo no contiene valores numéricos válidos.");
-        return;
-      }
-      setSeries(parsed);
-      setSeriesId(file.name);
-      return;
-    }
+    setTemporalProcessingLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/temporal/aggregate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dates: dates,
+          values: series,
+          target_frequency: "yearly",
+          aggregation_method: temporalAggregationMethod,
+          hydrological_year: temporalHydrologicalYear,
+          hydrological_start_month: temporalHydrologicalStartMonth,
+        }),
+      });
 
-    setFileError("Formato de archivo no compatible.");
+      const json = await response.json();
+      if (!response.ok) {
+        setTemporalProcessingError(json.detail || "Error en procesamiento temporal");
+      } else {
+        setTemporalProcessingResult(json);
+        // Actualizar serie con datos procesados
+        setSeries(json.values);
+        setDates(json.years.map(y => `${y}-06-15`)); // Fecha representativa del año
+      }
+    } catch (error) {
+      setTemporalProcessingError(
+        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
+      );
+    } finally {
+      setTemporalProcessingLoading(false);
+    }
+  };
+
+  /**
+   * Restaura la serie original antes del procesamiento.
+   */
+  const handleRestoreOriginal = () => {
+    if (originalSeries) {
+      setSeries(originalSeries.values);
+      setDates(originalSeries.dates);
+      setTemporalProcessingResult(null);
+      setTemporalProcessingEnabled(false);
+    }
+  };
+
+  /**
+   * Finaliza el flujo de importación y va a "done".
+   */
+  const handleFinishImport = () => {
+    setImportStep("done");
+    setFilePreview(null);
+    setRawFileContent(null);
+    setOriginalSeries(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -649,35 +1120,330 @@ export default function App() {
       <div className="section-grid">
         <section className="panel">
           <h2>1. Ingesta de datos</h2>
-          <div
-            className={`file-dropzone ${dragOver ? "dragover" : ""}`}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragOver(false);
-              const file = event.dataTransfer.files[0];
-              handleFile(file);
-            }}
-          >
-            <strong>Arrastra un CSV o Excel aquí</strong>
-            <p>O selecciona un archivo para cargar la serie de valores.</p>
-            <input
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              style={{ opacity: 0, position: "absolute", inset: 0, cursor: "pointer" }}
-              onChange={(event) => handleFile(event.target.files?.[0])}
-            />
-          </div>
-          {fileError ? <div className="error-banner">{fileError}</div> : null}
+
+          {/* PASO 1: DROPZONE (upload) */}
+          {(importStep === "upload" || importStep === "done") && (
+            <div
+              className={`file-dropzone ${dragOver ? "dragover" : ""}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragOver(false);
+                const file = event.dataTransfer.files[0];
+                handleFile(file);
+              }}
+            >
+              <strong>Arrastra un CSV o Excel aquí</strong>
+              <p>O selecciona un archivo para cargar la serie de valores.</p>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                style={{ opacity: 0, position: "absolute", inset: 0, cursor: "pointer" }}
+                onChange={(event) => handleFile(event.target.files?.[0])}
+              />
+            </div>
+          )}
+
+          {/* PASO 2: PREVIEW Y SELECCIÓN DE COLUMNAS */}
+          {importStep === "preview" && filePreview && (
+            <div className="import-preview-panel">
+              <h3>📄 Preview: {seriesId}</h3>
+
+              {/* Selector de hoja para Excel */}
+              {filePreview.sheetNames.length > 0 && (
+                <div style={{ marginBottom: "12px" }}>
+                  <label>Hoja: </label>
+                  <select
+                    value={selectedSheet}
+                    onChange={(e) => setSelectedSheet(Number(e.target.value))}
+                  >
+                    {filePreview.sheetNames.map((name, i) => (
+                      <option key={i} value={i}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Tabla de preview con iconos de tipo */}
+              <div className="table-wrapper" style={{ maxHeight: "200px", overflow: "auto" }}>
+                <table style={{ fontSize: "0.85em" }}>
+                  <thead>
+                    <tr>
+                      {filePreview.headers.map((header, i) => (
+                        <th key={i} style={{ textAlign: "center" }}>
+                          {header}
+                          <span style={{ marginLeft: "4px", fontSize: "0.9em" }}>
+                            {filePreview.columnTypes[i] === "date" && "📅"}
+                            {filePreview.columnTypes[i] === "numeric" && "🔢"}
+                            {filePreview.columnTypes[i] === "text" && "📝"}
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filePreview.rows.map((row, rowIdx) => (
+                      <tr key={rowIdx}>
+                        {row.map((cell, cellIdx) => (
+                          <td key={cellIdx} style={{ padding: "4px 8px" }}>{cell}</td>
+                        ))}
+                      </tr>
+                    ))}
+                    <tr>
+                      <td
+                        colSpan={filePreview.headers.length}
+                        style={{ textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}
+                      >
+                        ... (más filas)
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Leyenda de tipos */}
+              <div style={{ fontSize: "0.8em", color: "#94a3b8", marginTop: "8px" }}>
+                📅 Fecha | 🔢 Numérica | 📝 Texto
+              </div>
+
+              {/* Selectores de columnas */}
+              <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
+                    Columna de fechas:
+                  </label>
+                  <select
+                    value={selectedDateColumn}
+                    onChange={(e) => setSelectedDateColumn(e.target.value)}
+                    style={{ width: "100%", padding: "6px" }}
+                  >
+                    {filePreview.headers.map((header, i) => (
+                      <option key={i} value={header}>
+                        {filePreview.columnTypes[i] === "date" && "📅 "}
+                        {filePreview.columnTypes[i] === "numeric" && "🔢 "}
+                        {filePreview.columnTypes[i] === "text" && "📝 "}
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
+                    Columna de valores:
+                  </label>
+                  <select
+                    value={selectedValueColumn}
+                    onChange={(e) => setSelectedValueColumn(e.target.value)}
+                    style={{ width: "100%", padding: "6px" }}
+                  >
+                    {filePreview.headers.map((header, i) => (
+                      <option key={i} value={header}>
+                        {filePreview.columnTypes[i] === "date" && "📅 "}
+                        {filePreview.columnTypes[i] === "numeric" && "🔢 "}
+                        {filePreview.columnTypes[i] === "text" && "📝 "}
+                        {header}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Preview de importación */}
+              {selectedDateColumn && selectedValueColumn && (
+                <div style={{ marginTop: "16px", padding: "12px", background: "#0f172a", borderRadius: "6px" }}>
+                  <strong style={{ fontSize: "0.9em" }}>Preview de importación:</strong>
+                  <div style={{ fontSize: "0.8em", color: "#94a3b8", marginTop: "4px" }}>
+                    Fecha: <strong style={{ color: "#60a5fa" }}>{selectedDateColumn}</strong> | Valor: <strong style={{ color: "#60a5fa" }}>{selectedValueColumn}</strong>
+                  </div>
+                </div>
+              )}
+
+              {/* Botones de acción */}
+              <div className="button-group" style={{ marginTop: "16px" }}>
+                <button type="button" className="button-secondary" onClick={handleCancelImport}>
+                  ← Volver
+                </button>
+                <button
+                  type="button"
+                  className="button-primary"
+                  onClick={handleImport}
+                  disabled={!selectedDateColumn || !selectedValueColumn}
+                >
+                  Importar datos
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* PASO 3: PROCESAMIENTO TEMPORAL (OPCIONAL) */}
+          {importStep === "process" && (
+            <div className="import-preview-panel">
+              <h3>⚙️ Procesamiento Temporal</h3>
+
+              {/* Info de datos cargados */}
+              <div style={{ marginBottom: "16px", padding: "12px", background: "#0f172a", borderRadius: "6px" }}>
+                <strong>Datos cargados:</strong>
+                <div style={{ fontSize: "0.9em", color: "#94a3b8", marginTop: "4px" }}>
+                  {dates.length} observaciones desde {dates[0]} hasta {dates[dates.length - 1]}
+                </div>
+              </div>
+
+              {/* Toggle para activar procesamiento */}
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={temporalProcessingEnabled}
+                    onChange={(e) => setTemporalProcessingEnabled(e.target.checked)}
+                  />
+                  <span>Agregar datos a resolución anual</span>
+                </label>
+                <p style={{ fontSize: "0.8em", color: "#94a3b8", marginTop: "4px", marginLeft: "24px" }}>
+                  Recomendado para series mensuales, diarias o subdiarias. Reduce falsos rechazos en tests estadísticos.
+                </p>
+              </div>
+
+              {/* Opciones de agregación (solo si está activado) */}
+              {temporalProcessingEnabled && (
+                <div style={{ marginBottom: "16px", padding: "12px", background: "#0f172a", borderRadius: "6px" }}>
+                  <h4 style={{ marginBottom: "12px" }}>Opciones de agregación</h4>
+
+                  {/* Método de agregación */}
+                  <div style={{ marginBottom: "12px" }}>
+                    <label style={{ display: "block", marginBottom: "4px", fontSize: "0.9em" }}>
+                      Método de agregación:
+                    </label>
+                    <select
+                      value={temporalAggregationMethod}
+                      onChange={(e) => setTemporalAggregationMethod(e.target.value)}
+                      style={{ width: "100%", padding: "6px" }}
+                    >
+                      <option value="sum">Suma (para precipitación/volumen)</option>
+                      <option value="mean">Promedio (para temperatura/nivel)</option>
+                      <option value="max">Máximo (para caudal pico)</option>
+                      <option value="min">Mínimo</option>
+                    </select>
+                  </div>
+
+                  {/* Año hidrológico */}
+                  <div style={{ marginBottom: "12px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={temporalHydrologicalYear}
+                        onChange={(e) => setTemporalHydrologicalYear(e.target.checked)}
+                      />
+                      <span>Usar año hidrológico</span>
+                    </label>
+                  </div>
+
+                  {/* Mes de inicio del año hidrológico */}
+                  {temporalHydrologicalYear && (
+                    <div style={{ marginBottom: "12px" }}>
+                      <label style={{ display: "block", marginBottom: "4px", fontSize: "0.9em" }}>
+                        Mes de inicio del año hidrológico:
+                      </label>
+                      <select
+                        value={temporalHydrologicalStartMonth}
+                        onChange={(e) => setTemporalHydrologicalStartMonth(Number(e.target.value))}
+                        style={{ width: "100%", padding: "6px" }}
+                      >
+                        <option value={1}>Enero</option>
+                        <option value={2}>Febrero</option>
+                        <option value={3}>Marzo</option>
+                        <option value={4}>Abril</option>
+                        <option value={5}>Mayo</option>
+                        <option value={6}>Junio</option>
+                        <option value={7}>Julio</option>
+                        <option value={8}>Agosto</option>
+                        <option value={9}>Septiembre</option>
+                        <option value={10}>Octubre (default)</option>
+                        <option value={11}>Noviembre</option>
+                        <option value={12}>Diciembre</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Botón procesar */}
+                  <button
+                    type="button"
+                    className="button-primary"
+                    onClick={handleTemporalProcessing}
+                    disabled={temporalProcessingLoading}
+                    style={{ width: "100%" }}
+                  >
+                    {temporalProcessingLoading ? "Procesando..." : temporalProcessingResult ? "Reprocesar" : "Procesar datos"}
+                  </button>
+                </div>
+              )}
+
+              {/* Error de procesamiento */}
+              {temporalProcessingError && (
+                <div className="error-banner" style={{ marginBottom: "16px" }}>
+                  {temporalProcessingError}
+                </div>
+              )}
+
+              {/* Resultado del procesamiento */}
+              {temporalProcessingResult && (
+                <div style={{ marginBottom: "16px", padding: "12px", background: "#064e3b", borderRadius: "6px", border: "1px solid #10b981" }}>
+                  <h4 style={{ marginBottom: "8px", color: "#34d399" }}>✓ Procesamiento completado</h4>
+                  <div style={{ fontSize: "0.85em" }}>
+                    <div><strong>Frecuencia original:</strong> {temporalProcessingResult.original_frequency}</div>
+                    <div><strong>Años resultantes:</strong> {temporalProcessingResult.years.join(", ")}</div>
+                    <div><strong>Observaciones:</strong> {temporalProcessingResult.n_original} → {temporalProcessingResult.n_result}</div>
+                    <div><strong>Método:</strong> {temporalProcessingResult.aggregation_method}</div>
+                    {temporalProcessingResult.aggregation_bypass && (
+                      <div style={{ color: "#fbbf24" }}>⚠ Serie ya estaba anualizada (sin cambios)</div>
+                    )}
+                  </div>
+
+                  {/* Botón restaurar */}
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={handleRestoreOriginal}
+                    style={{ marginTop: "12px", fontSize: "0.85em" }}
+                  >
+                    ↺ Restaurar serie original
+                  </button>
+                </div>
+              )}
+
+              {/* Botones de acción final */}
+              <div className="button-group" style={{ marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => setImportStep("preview")}
+                >
+                  ← Volver
+                </button>
+                <button
+                  type="button"
+                  className="button-primary"
+                  onClick={handleFinishImport}
+                >
+                  Continuar al análisis →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {fileError ? <div className="error-banner" style={{ marginTop: "12px" }}>{fileError}</div> : null}
+
+          {/* Tabla de datos (siempre visible cuando hay datos) */}
           <div className="table-wrapper">
             <table>
               <thead>
                 <tr>
                   <th>#</th>
+                  {dates.length > 0 && <th>Fecha</th>}
                   <th>Valor</th>
                   <th>Acción</th>
                 </tr>
@@ -689,6 +1455,7 @@ export default function App() {
                   return (
                     <tr key={`row-${index}`} className={warningValue ? "cell-error" : ""}>
                       <td>{index + 1}</td>
+                      {dates.length > 0 && <td style={{ fontSize: "0.85em", color: "#94a3b8" }}>{dates[index] || "-"}</td>}
                       <td>
                         <input
                           type="number"

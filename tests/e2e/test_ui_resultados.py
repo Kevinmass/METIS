@@ -19,9 +19,10 @@ def test_ui_resultados(page: Page):
 
     Escenario:
         1. Usuario carga serie de referencia 1
-        2. Ejecuta análisis SAMHIA
-        3. Espera que termine el procesamiento
-        4. Sistema muestra resultados estructurados
+        2. Completa flujo de importación con preview
+        3. Ejecuta análisis SAMHIA
+        4. Espera que termine el procesamiento
+        5. Sistema muestra resultados estructurados
 
     Valida:
         - Pills de veredicto renderizados en resultados SAMHIA
@@ -31,16 +32,22 @@ def test_ui_resultados(page: Page):
     """
     page.goto("http://localhost:5173")
 
-    # Scroll a sección SAMHIA
-    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
-    samhia_heading.scroll_into_view_if_needed()
-
-    # Cargar serie de referencia en sección de ingesta
+    # Cargar serie de referencia en sección de ingesta (con nuevo flujo)
     ingest_section = page.locator("section", has_text="Ingesta de datos").first
     file_input = ingest_section.locator("input[type='file']")
     file_input.set_input_files("tests/fixtures/series_referencia_1.csv")
 
-    # Obtener sección SAMHIA y ejecutar análisis
+    # Esperar preview y completar importación
+    expect(page.locator("text=Preview:")).to_be_visible()
+    page.get_by_role("button", name="Importar datos").click()
+
+    # Esperar paso de procesamiento y continuar
+    expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
+    page.get_by_role("button", name="Continuar al análisis").click()
+
+    # Scroll a sección SAMHIA y ejecutar análisis
+    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
+    samhia_heading.scroll_into_view_if_needed()
     samhia_section = page.locator("section", has_text="Análisis SAMHIA").first
     analyze_button = samhia_section.locator(
         "button", has_text="Ejecutar análisis SAMHIA"
@@ -74,7 +81,8 @@ def test_ui_graficos_detalle(page: Page):
 
     Escenario:
         1. Usuario carga serie de referencia
-        2. Gráficos se renderizan con datos reales
+        2. Completa flujo de importación
+        3. Gráficos se renderizan con datos reales
 
     Valida:
         - Elemento SVG de gráfico visible
@@ -90,6 +98,14 @@ def test_ui_graficos_detalle(page: Page):
 
     # Cargar serie
     page.set_input_files("input[type='file']", "tests/fixtures/series_referencia_1.csv")
+
+    # Esperar preview y completar importación
+    expect(page.locator("text=Preview:")).to_be_visible()
+    page.get_by_role("button", name="Importar datos").click()
+
+    # Esperar paso de procesamiento y continuar
+    expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
+    page.get_by_role("button", name="Continuar al análisis").click()
 
     # Verificar SVG de dispersión
     svg = page.locator("svg").first
