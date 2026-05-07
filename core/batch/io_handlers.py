@@ -80,7 +80,9 @@ def read_file_intelligent(  # noqa: C901
 
     # Convertir columna de fecha si se especifica
     if date_column and date_column in df.columns:
-        df[date_column] = pd.to_datetime(df[date_column], errors="coerce")
+        df[date_column] = pd.to_datetime(
+            df[date_column], dayfirst=True, errors="coerce"
+        )
 
     return df
 
@@ -200,7 +202,9 @@ def validate_dataframe_for_analysis(
 
     # Convertir y validar fechas
     try:
-        df[date_column] = pd.to_datetime(df[date_column], errors="coerce")
+        df[date_column] = pd.to_datetime(
+            df[date_column], dayfirst=True, errors="coerce"
+        )
     except Exception as e:  # noqa: BLE001
         return False, f"Error convirtiendo columna de fechas '{date_column}': {e!s}"
 
@@ -262,7 +266,7 @@ def prepare_dataframe_for_analysis(
     df_prep.columns = ["date", "variable"]
 
     # Convertir fechas y limpiar
-    df_prep["date"] = pd.to_datetime(df_prep["date"], errors="coerce")
+    df_prep["date"] = pd.to_datetime(df_prep["date"], dayfirst=True, errors="coerce")
     df_prep["variable"] = pd.to_numeric(
         df_prep["variable"].astype(str).str.strip(), errors="coerce"
     )

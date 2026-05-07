@@ -71,7 +71,7 @@ def test_ui_ingesta_manual(page: Page):
     )  # 2 valores negativos/cero + 1 valor por defecto 0
 
     # Verificar advertencias
-    expect(page.locator(".warning-banner")).to_be_visible()
+    expect(page.locator(".status-banner.warning")).to_be_visible()
     expect(
         page.locator("text=Se encontraron 3 valores negativos o cero.")
     ).to_be_visible()
@@ -111,7 +111,7 @@ def test_ui_ingesta_csv(page: Page):
     expect(inputs).to_have_count(36)  # CSV tiene 36 valores (sin header)
 
     # Verificar identificador
-    expect(page.locator("text=series_referencia_1.csv")).to_be_visible()
+    expect(page.get_by_text("series_referencia_1.csv", exact=True)).to_be_visible()
 
 
 def test_ui_resultados_semaforo(page: Page):

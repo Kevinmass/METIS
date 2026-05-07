@@ -101,7 +101,7 @@ async def analyze_samhia(request: SamhiaAnalysisRequest):
     # Crear DataFrame con validación de fechas
     df = pd.DataFrame(
         {
-            "date": pd.to_datetime(request.dates, errors="coerce"),
+            "date": pd.to_datetime(request.dates, dayfirst=False, errors="coerce"),
             request.series_name: request.data,
         }
     )
@@ -221,7 +221,7 @@ async def generate_pdf(request: PDFGenerationRequest):
     # Crear DataFrame con validación de fechas
     df = pd.DataFrame(
         {
-            "date": pd.to_datetime(request.dates, errors="coerce"),
+            "date": pd.to_datetime(request.dates, dayfirst=True, errors="coerce"),
             request.series_name: request.data,
         }
     )
@@ -516,7 +516,7 @@ async def generate_outlier_plots(  # noqa: PLR0915
     # Crear DataFrame con validación de fechas
     df = pd.DataFrame(
         {
-            "date": pd.to_datetime(request.dates, errors="coerce"),
+            "date": pd.to_datetime(request.dates, dayfirst=True, errors="coerce"),
             request.series_name: request.data,
         }
     )

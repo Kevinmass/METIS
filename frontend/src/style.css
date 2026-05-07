@@ -24,9 +24,43 @@
 :root {
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #08101f;
-  color: #e7edf8;
+  background: #0a1628;
+  color: #f1f5f9;
   line-height: 1.5;
+}
+
+/* Asegurar buen contraste en modo claro también */
+@media (prefers-color-scheme: light) {
+  :root {
+    background: #f8fafc;
+    color: #0f172a;
+  }
+  
+  .water-chart-box {
+    background: linear-gradient(145deg, #ffffff 0%, #f1f5f9 100%);
+    color: #1e293b;
+  }
+  
+  .water-chart-box .chart-title {
+    color: #0f172a;
+    border-bottom: 1px solid rgba(0, 170, 255, 0.3);
+  }
+  
+  .temporal-controls {
+    background: rgba(241, 245, 249, 0.8);
+    border-color: #cbd5e1;
+  }
+  
+  .temporal-control-group label {
+    color: #475569;
+  }
+  
+  .temporal-control-group select,
+  .temporal-control-group input[type="number"] {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    color: #0f172a;
+  }
 }
 
 /* ==========================================================================
@@ -357,4 +391,266 @@ small {
 .file-dropzone strong {
   display: block;
   margin: 10px 0 5px;
+}
+
+/* ==========================================================================
+   WATER CHART BOX - Componente con efecto salpicadura (ripple)
+   ========================================================================== */
+
+.water-chart-box {
+  position: relative;
+  background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+  border: 2px solid transparent;
+  border-radius: 20px;
+  padding: 20px;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.water-chart-box::before,
+.water-chart-box::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border: 2px solid #00aaff;
+  border-radius: 20px;
+  transform: translate(-50%, -50%) scale(0.95);
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+
+/* Efecto ripple al hacer hover */
+.water-chart-box:hover::before {
+  animation: ripple-effect 1.4s ease-out forwards;
+}
+
+.water-chart-box:hover::after {
+  animation: ripple-effect 1.4s ease-out 0.4s forwards;
+}
+
+@keyframes ripple-effect {
+  0% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 0.9;
+    border-width: 2px;
+  }
+  50% {
+    opacity: 0.5;
+    border-width: 3px;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.85);
+    opacity: 0;
+    border-width: 4px;
+  }
+}
+
+/* Hover efecto en el contenedor */
+.water-chart-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 170, 255, 0.15),
+              0 0 0 1px rgba(0, 170, 255, 0.3);
+}
+
+/* Título del gráfico - color muy claro para máximo contraste */
+.water-chart-box .chart-title {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 16px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(0, 170, 255, 0.3);
+  padding-bottom: 12px;
+}
+
+/* Contenido del gráfico - texto claro sobre fondo oscuro */
+.water-chart-box .chart-content {
+  position: relative;
+  z-index: 1;
+  min-height: 200px;
+  color: #f8fafc;
+}
+
+.water-chart-box .chart-content p,
+.water-chart-box .chart-content span {
+  color: #e2e8f0;
+}
+
+/* Variantes de tamaño */
+.water-chart-box--small {
+  padding: 14px;
+}
+
+.water-chart-box--small .chart-content {
+  min-height: 120px;
+}
+
+.water-chart-box--large {
+  padding: 28px;
+}
+
+.water-chart-box--large .chart-content {
+  min-height: 320px;
+}
+
+.water-chart-box--full {
+  grid-column: 1 / -1;
+}
+
+/* Colores temáticos de agua para diferentes estados */
+.water-chart-box.type-precipitation::before,
+.water-chart-box.type-precipitation::after {
+  border-color: #60a5fa;
+}
+
+.water-chart-box.type-flow::before,
+.water-chart-box.type-flow::after {
+  border-color: #34d399;
+}
+
+.water-chart-box.type-level::before,
+.water-chart-box.type-level::after {
+  border-color: #f472b6;
+}
+
+/* ==========================================================================
+   CONTROLES TEMPORALES EXPANDIDOS
+   ========================================================================== */
+
+.temporal-controls {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 12px;
+  border: 1px solid #1f2e47;
+}
+
+.temporal-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.temporal-control-group {
+  flex: 1;
+  min-width: 180px;
+}
+
+.temporal-control-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.temporal-control-group select,
+.temporal-control-group input[type="number"] {
+  width: 100%;
+  padding: 10px 12px;
+  background: #0f172a;
+  border: 1px solid #1f2e47;
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+}
+
+.temporal-control-group select:focus,
+.temporal-control-group input[type="number"]:focus {
+  outline: 2px solid #00aaff;
+  border-color: #00aaff;
+}
+
+/* Toggle switch personalizado */
+.temporal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.temporal-toggle input[type="checkbox"] {
+  width: 44px;
+  height: 24px;
+  appearance: none;
+  background: #1f2e47;
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.temporal-toggle input[type="checkbox"]::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: #94a3b8;
+  border-radius: 50%;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.temporal-toggle input[type="checkbox"]:checked {
+  background: #00aaff;
+}
+
+.temporal-toggle input[type="checkbox"]:checked::before {
+  transform: translateX(20px);
+  background: white;
+}
+
+/* ==========================================================================
+   SECCIÓN DE VISUALIZACIONES SEPARADA
+   ========================================================================== */
+
+.visualizations-section {
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 2px solid #1f2e47;
+}
+
+.visualizations-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+}
+
+.visualizations-grid .water-chart-box--full {
+  grid-column: 1 / -1;
+}
+
+/* Botón para cargar gráficos */
+.btn-load-plots {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #00aaff 0%, #0088cc 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-load-plots:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 170, 255, 0.4);
+}
+
+.btn-load-plots:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }

@@ -20,6 +20,13 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+
+// Sistema de Diseño Frutiger Aero - Estilos Globales
+import "./styles/frutiger-aero.css";
+import "./styles/animations.css";
+import "./styles/components.css";
+
+// Estilos legacy (mantenidos temporalmente para compatibilidad)
 import "./style.css";
 
 // Obtener contenedor root del DOM

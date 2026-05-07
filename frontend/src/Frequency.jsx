@@ -14,6 +14,8 @@
  */
 
 import { useState, useMemo } from "react";
+import { AsymmetricDistributionsChart, FrequencyTheoryInfo, ToastContainer } from "./components";
+import { useToast } from "./hooks/useToast";
 
 // =============================================================================
 // CONSTANTES DE CONFIGURACIÓN
@@ -23,7 +25,7 @@ import { useState, useMemo } from "react";
 const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 /** Métodos de estimación disponibles */
-const ESTIMATION_METHODS = ["MOM", "MLE", "MEnt"];
+const ESTIMATION_METHODS = ["MOM", "MLE", "MEnt", "LMom"];
 
 /** Distribuciones disponibles para ajuste */
 const AVAILABLE_DISTRIBUTIONS = [
@@ -71,6 +73,12 @@ const statusText = (verdict) => {
  */
 export default function Frequency({ series, seriesId }) {
   // ---------------------------------------------------------------------------
+  // NOTIFICACIONES TOAST (Epic 4)
+  // ---------------------------------------------------------------------------
+
+  const { toasts, removeToast, showSuccess, showError, showWarning, showInfo } = useToast();
+
+  // ---------------------------------------------------------------------------
   // ESTADO DEL COMPONENTE
   // ---------------------------------------------------------------------------
 
@@ -102,7 +110,9 @@ export default function Frequency({ series, seriesId }) {
     setDesignEvent(null);
 
     if (series.length < 3) {
-      setFitError("La serie debe tener al menos 3 valores numéricos.");
+      const msg = "La serie debe tener al menos 3 valores numéricos.";
+      setFitError(msg);
+      showWarning(msg, { title: "Datos insuficientes" });
       return;
     }
 
@@ -120,18 +130,27 @@ export default function Frequency({ series, seriesId }) {
 
       const json = await response.json();
       if (!response.ok) {
-        setFitError(json.detail || "Error al ajustar distribuciones");
+        const errorMsg = json.message || json.detail || "Error al ajustar distribuciones";
+        const suggestion = json.suggestion || "";
+        setFitError(errorMsg);
+        showError(`${errorMsg}${suggestion ? `. ${suggestion}` : ""}`, {
+          title: json.error_type === "MATH_ERROR" ? "Error matemático" : "Error",
+        });
       } else {
         setFitResults(json);
         // Seleccionar la distribución recomendada por defecto
         if (json.recommended_distribution) {
           setSelectedDistribution(json.recommended_distribution);
         }
+        showSuccess(
+          `Ajuste completado. Mejor distribución: ${json.recommended_distribution?.distribution_name || "N/A"}`,
+          { title: "Análisis de frecuencia" }
+        );
       }
     } catch (error) {
-      setFitError(
-        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
-      );
+      const msg = `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`;
+      setFitError(msg);
+      showError(msg, { title: "Error de conexión" });
     } finally {
       setIsFitting(false);
     }
@@ -147,12 +166,16 @@ export default function Frequency({ series, seriesId }) {
     setDesignEvent(null);
 
     if (!selectedDistribution) {
-      setDesignError("Selecciona una distribución primero.");
+      const msg = "Selecciona una distribución primero.";
+      setDesignError(msg);
+      showWarning(msg, { title: "Distribución requerida" });
       return;
     }
 
     if (returnPeriod <= 0) {
-      setDesignError("El período de retorno debe ser positivo.");
+      const msg = "El período de retorno debe ser positivo.";
+      setDesignError(msg);
+      showWarning(msg, { title: "Período inválido" });
       return;
     }
 
@@ -170,14 +193,23 @@ export default function Frequency({ series, seriesId }) {
 
       const json = await response.json();
       if (!response.ok) {
-        setDesignError(json.detail || "Error al calcular evento de diseño");
+        const errorMsg = json.message || json.detail || "Error al calcular evento de diseño";
+        const suggestion = json.suggestion || "";
+        setDesignError(errorMsg);
+        showError(`${errorMsg}${suggestion ? `. ${suggestion}` : ""}`, {
+          title: "Error en cálculo",
+        });
       } else {
         setDesignEvent(json);
+        showSuccess(
+          `Evento de diseño T=${json.return_period}: ${json.design_value?.toFixed(2) || "N/A"}`,
+          { title: "Cálculo completado" }
+        );
       }
     } catch (error) {
-      setDesignError(
-        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
-      );
+      const msg = `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`;
+      setDesignError(msg);
+      showError(msg, { title: "Error de conexión" });
     } finally {
       setIsCalculatingDesign(false);
     }
@@ -207,6 +239,26 @@ export default function Frequency({ series, seriesId }) {
           </p>
         </div>
       </header>
+
+      {/* Gráfico de distribuciones asimétricas */}
+      <section className="panel theory-section">
+        <div className="section-header">
+          <h2>📊 Distribuciones Asimétricas para Análisis de Frecuencia</h2>
+          <p className="section-description">
+            Visualización de las funciones de densidad de probabilidad (PDF) de las distribuciones
+            asimétricas utilizadas en hidrología. Haz clic en las etiquetas para mostrar/ocultar cada curva.
+          </p>
+        </div>
+        <AsymmetricDistributionsChart />
+      </section>
+
+      {/* Información teórica */}
+      <section className="panel theory-section">
+        <FrequencyTheoryInfo />
+      </section>
+
+      {/* Contenedor de notificaciones Toast (Epic 4) */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       <div className="section-grid">
         {/* Panel de configuración */}
@@ -291,7 +343,7 @@ export default function Frequency({ series, seriesId }) {
                     <p className="pill accepted" style={{ marginTop: "8px" }}>
                       {fitResults.recommended_distribution.distribution_name}
                     </p>
-                    <p style={{ marginTop: "8px", fontSize: "0.9rem", color: "#94a3b8" }}>
+                    <p style={{ marginTop: "8px", fontSize: "0.9rem", color: "#e2e8f0" }}>
                       Método: {fitResults.estimation_method} | N: {fitResults.n}
                     </p>
                   </>
@@ -569,7 +621,7 @@ function GoodnessOfFitComparisonChart({ distributions }) {
               stroke="#1f2e47"
               strokeDasharray="4 4"
             />
-            <text x={padding.left - 10} y={y + 4} fill="#94a3b8" fontSize="11" textAnchor="end">
+            <text x={padding.left - 10} y={y + 4} fill="#cbd5e1" fontSize="11" textAnchor="end">
               {value.toFixed(2)}
             </text>
           </g>
@@ -732,7 +784,7 @@ function GoodnessOfFitRadarChart({ goodnessOfFit }) {
           <text
             x={center + (radius + 15) * Math.cos((i * 2 * Math.PI) / metrics.length - Math.PI / 2)}
             y={center + (radius + 15) * Math.sin((i * 2 * Math.PI) / metrics.length - Math.PI / 2)}
-            fill="#94a3b8"
+            fill="#cbd5e1"
             fontSize="11"
             textAnchor="middle"
             dominantBaseline="middle"
@@ -813,7 +865,7 @@ function DistributionRankingChart({ distributions }) {
               stroke="#1f2e47"
               strokeDasharray="4 4"
             />
-            <text x={x} y={height - padding.bottom + 20} fill="#94a3b8" fontSize="11" textAnchor="middle">
+            <text x={x} y={height - padding.bottom + 20} fill="#cbd5e1" fontSize="11" textAnchor="middle">
               {value.toFixed(2)}
             </text>
           </g>
@@ -872,7 +924,7 @@ function DistributionRankingChart({ distributions }) {
             <text
               x={width - padding.right + 20}
               y={y + barHeight / 2 + 4}
-              fill={isTop3 ? "#34d399" : "#94a3b8"}
+              fill={isTop3 ? "#34d399" : "#e2e8f0"}
               fontSize="12"
               fontWeight="bold"
             >
@@ -886,7 +938,7 @@ function DistributionRankingChart({ distributions }) {
       <text
         x={(width - padding.left - padding.right) / 2 + padding.left}
         y={height - 15}
-        fill="#94a3b8"
+        fill="#cbd5e1"
         fontSize="12"
         textAnchor="middle"
       >

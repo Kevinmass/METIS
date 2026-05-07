@@ -104,7 +104,7 @@ def _detect_frequency_from_two_points(series: pd.Series) -> FrequencyType:
     return FrequencyType.IRREGULAR
 
 
-def detect_frequency(  # noqa: C901, PLR0911, PLR0912
+def detect_frequency(  # noqa: PLR0912
     series: pd.Series,
 ) -> FrequencyType:
     """Detecta la frecuencia temporal de una serie.
@@ -219,10 +219,112 @@ def _get_year_from_hydrological(
     return pd.Series(np.where(month >= start_month, year + 1, year), index=dates)
 
 
+def _get_day_period_from_hour(
+    dates: pd.DatetimeIndex, start_hour: int = 0
+) -> pd.Series:
+    """Calcula el período diario personalizado para cada timestamp.
+
+    Similar al año hidrológico pero para períodos de 24 horas.
+    Ejemplo: período 2020-01-01 va de 09:00 del día anterior a 09:00 del día actual.
+
+    Args:
+        dates: Índice de timestamps.
+        start_hour: Hora de inicio del período diario (default 0 = medianoche).
+
+    Returns:
+        Serie con la fecha del período diario de cada timestamp.
+    """
+    # Para timestamps antes de start_hour, pertenecen al día anterior
+    # Para timestamps desde start_hour en adelante, pertenecen al día actual
+    day = dates.day
+    month = dates.month
+    year = dates.year
+    hour = dates.hour
+
+    # Crear fechas base
+    base_dates = pd.to_datetime(
+        pd.DataFrame({"year": year, "month": month, "day": day})
+    )
+
+    # Ajustar: si hora < start_hour, restar un día
+    adjustment = pd.Series(
+        np.where(hour < start_hour, pd.Timedelta(days=-1), pd.Timedelta(days=0)),
+        index=dates,
+    )
+    result = base_dates + adjustment
+
+    return pd.Series(result, index=dates)
+
+
+def _get_frequency_rank(freq: FrequencyType) -> int:
+    """Retorna el ranking de frecuencia para comparaciones (menor = más frecuente).
+
+    Args:
+        freq: Tipo de frecuencia.
+
+    Returns:
+        Número indicando el nivel de agregación (1=5min, 7=yearly).
+    """
+    ranking = {
+        FrequencyType.MINUTES_5: 1,
+        FrequencyType.MINUTES: 2,
+        FrequencyType.HOURLY: 3,
+        FrequencyType.DAILY: 4,
+        FrequencyType.MONTHLY: 5,
+        FrequencyType.YEARLY: 6,
+        FrequencyType.IRREGULAR: 99,
+    }
+    return ranking.get(freq, 99)
+
+
+def can_aggregate_to(source_freq: FrequencyType, target_freq: str) -> bool:
+    """Verifica si se puede agregar desde una frecuencia a otra.
+
+    Solo permite agregación ascendente (de menor a mayor frecuencia).
+    Ejemplo: minutos -> horas SI, horas -> minutos NO.
+    Para frecuencias IRREGULAR, usa get_available_targets().
+
+    Args:
+        source_freq: Frecuencia de la serie original.
+        target_freq: Frecuencia objetivo como string.
+
+    Returns:
+        True si la agregación es válida.
+    """
+    # Para IRREGULAR, usar get_available_targets en lugar de rank
+    if source_freq == FrequencyType.IRREGULAR:
+        return target_freq in get_available_targets(source_freq)
+
+    target_enum = None
+    try:
+        target_enum = FrequencyType(target_freq)
+    except ValueError:
+        # Soportar aliases comunes
+        aliases = {
+            "yearly": FrequencyType.YEARLY,
+            "annual": FrequencyType.YEARLY,
+            "monthly": FrequencyType.MONTHLY,
+            "daily": FrequencyType.DAILY,
+            "hourly": FrequencyType.HOURLY,
+            "5min": FrequencyType.MINUTES_5,
+            "minutes": FrequencyType.MINUTES,
+        }
+        target_enum = aliases.get(target_freq.lower())
+
+    if target_enum is None:
+        return False
+
+    source_rank = _get_frequency_rank(source_freq)
+    target_rank = _get_frequency_rank(target_enum)
+
+    # Solo permitir agregación ascendente (source más frecuente que target)
+    return source_rank < target_rank
+
+
 def aggregate_monthly(
     series: pd.Series,
     method: Literal["sum", "mean", "max", "min"] = "sum",
-    hydrological_year: bool = False,  # noqa: FBT001, FBT002
+    hydrological_year: bool = False,
     hydrological_start_month: int = 10,
 ) -> pd.Series:
     """Agrega serie mensual a anual.
@@ -290,36 +392,90 @@ def aggregate_daily(
 def aggregate_subdaily(
     series: pd.Series,
     target: Literal[
-        "daily_max", "daily_sum", "monthly_sum", "annual_max", "annual_sum"
+        "hourly_max",
+        "hourly_sum",
+        "hourly_mean",
+        "daily_max",
+        "daily_sum",
+        "daily_mean",
+        "monthly_max",
+        "monthly_sum",
+        "monthly_mean",
+        "annual_max",
+        "annual_sum",
+        "annual_mean",
     ] = "annual_max",
+    daily_start_hour: int = 0,
+    hydrological_year: bool = False,
+    hydrological_start_month: int = 10,
 ) -> pd.Series:
-    """Agrega serie horaria o por minutos.
+    """Agrega serie horaria o por minutos con soporte para período diario personalizado.
 
     Args:
         series: Serie con DatetimeIndex horario o por minutos.
         target: Tipo de agregación deseado:
-            - "daily_max": Máximo diario
-            - "daily_sum": Acumulado diario
-            - "monthly_sum": Acumulado mensual
-            - "annual_max": Máximo anual
-            - "annual_sum": Suma anual
+            - "hourly_*": Agregación a nivel horario
+            - "daily_*": Agregación a nivel diario con período 24hs personalizado
+            - "monthly_*": Agregación mensual
+            - "annual_*": Agregación anual
+        daily_start_hour: Hora de inicio del período diario (0-23, default 0 = medianoche).
+        hydrological_year: Si True, usa año hidrológico para agregación anual desde mensual.
+        hydrological_start_month: Mes de inicio del año hidrológico.
 
     Returns:
         Serie agregada según el target especificado.
     """
-    if target == "daily_max":
-        result = series.resample("D").max()
+    # Agregación horaria
+    if target == "hourly_max":
+        result = series.resample("h").max()
+        result.index.name = "hour"
+        return result
+    if target == "hourly_sum":
+        result = series.resample("h").sum()
+        result.index.name = "hour"
+        return result
+    if target == "hourly_mean":
+        result = series.resample("h").mean()
+        result.index.name = "hour"
+        return result
+
+    # Agregación diaria con período personalizado
+    if target in ("daily_max", "daily_sum", "daily_mean"):
+        method = target.split("_")[1]  # max, sum, mean
+        if daily_start_hour == 0:
+            # Período estándar 00:00-00:00
+            result = series.resample("D").agg(method)
+        else:
+            # Período personalizado: usar daily_start_hour como offset
+            # Crear índice de período diario
+            day_period = _get_day_period_from_hour(series.index, daily_start_hour)
+            # Agrupar por período diario
+            grouped = series.groupby(day_period.values)
+            result = grouped.agg(method)
+            # Convertir índice de strings a datetime
+            result.index = pd.to_datetime(result.index)
+
         result.index.name = "date"
         return result
-    if target == "daily_sum":
-        result = series.resample("D").sum()
-        result.index.name = "date"
+
+    # Agregación mensual
+    if target == "monthly_max":
+        result = series.resample("ME").max()
+        result.index = result.index.to_period("M")
+        result.index.name = "month"
         return result
     if target == "monthly_sum":
         result = series.resample("ME").sum()
         result.index = result.index.to_period("M")
         result.index.name = "month"
         return result
+    if target == "monthly_mean":
+        result = series.resample("ME").mean()
+        result.index = result.index.to_period("M")
+        result.index.name = "month"
+        return result
+
+    # Agregación anual
     if target == "annual_max":
         # Máximo anual: primero diario, luego anual
         daily_max = series.resample("D").max()
@@ -332,57 +488,82 @@ def aggregate_subdaily(
         result.index = result.index.year
         result.index.name = "year"
         return result
+    if target == "annual_mean":
+        result = series.resample("YE").mean()
+        result.index = result.index.year
+        result.index.name = "year"
+        return result
 
     msg = f"Target de agregación no soportado: {target}"
     raise ValueError(msg)
 
 
-def auto_aggregate(  # noqa: C901
+def get_available_targets(source_freq: FrequencyType) -> list[str]:
+    """Retorna las frecuencias objetivo disponibles para agregación.
+
+    Args:
+        source_freq: Frecuencia de la serie original.
+
+    Returns:
+        Lista de frecuencias objetivo válidas para agregación ascendente.
+    """
+    targets_by_source = {
+        FrequencyType.MINUTES_5: ["hourly", "daily", "monthly", "yearly"],
+        FrequencyType.MINUTES: ["hourly", "daily", "monthly", "yearly"],
+        FrequencyType.HOURLY: ["daily", "monthly", "yearly"],
+        FrequencyType.DAILY: ["monthly", "yearly"],
+        FrequencyType.MONTHLY: ["yearly"],
+        FrequencyType.YEARLY: [],
+        FrequencyType.IRREGULAR: ["yearly"],
+    }
+    return targets_by_source.get(source_freq, [])
+
+
+def auto_aggregate(  # noqa: PLR0912, PLR0913
     series: pd.Series,
-    target_frequency: Literal["yearly"] = "yearly",
+    target_frequency: Literal[
+        "5min", "minutes", "hourly", "daily", "monthly", "yearly"
+    ] = "yearly",
     aggregation_method: Literal["sum", "mean", "max", "min"] = "sum",
-    hydrological_year: bool = False,  # noqa: FBT001, FBT002
+    hydrological_year: bool = False,
     hydrological_start_month: int = 10,
+    daily_start_hour: int = 0,
 ) -> pd.Series:
     """Agrega automáticamente una serie a la frecuencia objetivo.
 
     Detecta la frecuencia original y aplica la agregación apropiada.
-    **Si la serie ya es anual (YEARLY), la retorna sin modificaciones.**
+    Soporta agregación ascendente flexible (menor a mayor frecuencia).
+    **Si la serie ya es de la frecuencia objetivo, la retorna sin modificaciones.**
 
     Args:
         series: Serie con DatetimeIndex. Debe tener índice temporal válido.
-        target_frequency: Frecuencia objetivo (solo "yearly" soportado actualmente).
-        aggregation_method: Método de agregación para series mensuales.
-        hydrological_year: Si True, usa año hidrológico para series mensuales.
+        target_frequency: Frecuencia objetivo.
+            Opciones: "5min", "minutes", "hourly", "daily", "monthly", "yearly".
+        aggregation_method: Método de agregación ("sum", "mean", "max", "min").
+        hydrological_year: Si True, usa año hidrológico para agregación anual.
         hydrological_start_month: Mes de inicio del año hidrológico (default 10).
+        daily_start_hour: Hora de inicio del período diario (0-23, default 0).
 
     Returns:
-        Serie agregada al target. Si la serie ya era anual, retorna
-        la original con atributo `._aggregation_bypass = True`.
+        Serie agregada al target con metadatos de transformación.
 
     Raises:
-        ValueError: Si target_frequency no es "yearly" o si la serie no tiene
-            DatetimeIndex.
+        ValueError: Si la agregación solicitada no es válida (ascendente).
+        TypeError: Si la serie no tiene DatetimeIndex.
 
     Example:
-        >>> # Serie mensual
+        >>> # Serie mensual a anual
         >>> dates = pd.date_range("2020-01", periods=24, freq="ME")
         >>> series = pd.Series(range(24), index=dates)
-        >>> annual = auto_aggregate(series)
+        >>> annual = auto_aggregate(series, target_frequency="yearly")
         >>> len(annual)
         2
 
-        >>> # Serie ya anual - retorna sin modificar
-        >>> dates = pd.date_range("2020", periods=3, freq="YS")
-        >>> series = pd.Series([100, 200, 150], index=dates)
-        >>> result = auto_aggregate(series)
-        >>> result is series  # Misma referencia
-        True
+        >>> # Serie por minutos a diaria con período 09:00-09:00
+        >>> dates = pd.date_range("2020-01-01", periods=1440, freq="min")
+        >>> series = pd.Series(range(1440), index=dates)
+        >>> daily = auto_aggregate(series, target_frequency="daily", daily_start_hour=9)
     """
-    if target_frequency != "yearly":
-        msg = f"Solo target_frequency='yearly' está soportado, got {target_frequency}"
-        raise ValueError(msg)
-
     if not isinstance(series.index, pd.DatetimeIndex):
         msg = "La serie debe tener un DatetimeIndex válido"
         raise TypeError(msg)
@@ -394,48 +575,120 @@ def auto_aggregate(  # noqa: C901
         result._original_frequency = "empty"  # noqa: SLF001
         return result
 
-    # Detectar frecuencia
-    freq = detect_frequency(series)
+    # Detectar frecuencia original
+    source_freq = detect_frequency(series)
 
-    # BYPASS: Si ya es anual, retornar sin modificar
-    if freq == FrequencyType.YEARLY:
+    # BYPASS: Si ya es de la frecuencia objetivo, retornar sin modificar
+    target_enum = None
+    try:
+        target_enum = FrequencyType(target_frequency)
+    except ValueError:
+        aliases = {
+            "yearly": FrequencyType.YEARLY,
+            "annual": FrequencyType.YEARLY,
+            "monthly": FrequencyType.MONTHLY,
+            "daily": FrequencyType.DAILY,
+            "hourly": FrequencyType.HOURLY,
+            "5min": FrequencyType.MINUTES_5,
+            "minutes": FrequencyType.MINUTES,
+        }
+        target_enum = aliases.get(target_frequency.lower())
+
+    if target_enum == source_freq:
         result = series.copy()
         result._aggregation_bypass = True  # noqa: SLF001
-        result._original_frequency = freq.value  # noqa: SLF001
+        result._original_frequency = source_freq.value  # noqa: SLF001
         return result
 
+    # Verificar que la agregación es ascendente (menor a mayor frecuencia)
+    if not can_aggregate_to(source_freq, target_frequency):
+        msg = f"No se puede agregar desde {source_freq.value} a {target_frequency}. "
+        msg += f"Targets válidos: {get_available_targets(source_freq)}"
+        raise ValueError(msg)
+
+    # Construir target string para aggregate_subdaily
+    target_str = f"{target_frequency}_{aggregation_method}"
+    if target_frequency in ("yearly", "monthly", "daily", "hourly"):
+        # Mapear a targets soportados por aggregate_subdaily
+        target_mapping = {
+            "yearly": "annual",
+            "monthly": "monthly",
+            "daily": "daily",
+            "hourly": "hourly",
+        }
+        prefix = target_mapping.get(target_frequency, target_frequency)
+        target_str = f"{prefix}_{aggregation_method}"
+
     # Agregar según frecuencia detectada
-    if freq == FrequencyType.MONTHLY:
+    if source_freq == FrequencyType.MONTHLY and target_frequency == "yearly":
         result = aggregate_monthly(
             series,
             method=aggregation_method,
             hydrological_year=hydrological_year,
             hydrological_start_month=hydrological_start_month,
         )
-    elif freq == FrequencyType.DAILY:
-        # Para diaria, default es máximo anual (común en hidrología)
-        if aggregation_method == "max":
-            result = aggregate_daily(series, target="annual_max")
-        elif aggregation_method == "sum":
-            result = aggregate_daily(series, target="annual_sum")
+    elif source_freq == FrequencyType.DAILY:
+        if target_frequency == "yearly":
+            result = aggregate_daily(
+                series,
+                target=f"annual_{aggregation_method}"
+                if aggregation_method != "mean"
+                else "annual_max",
+            )
+        elif target_frequency == "monthly":
+            result = series.resample("ME").agg(aggregation_method)
+            result.index = result.index.to_period("M")
+            result.index.name = "month"
         else:
-            result = aggregate_daily(series, target="annual_max")
-    elif freq in (FrequencyType.HOURLY, FrequencyType.MINUTES, FrequencyType.MINUTES_5):
-        # Para subdiaria, ir a máximo anual (vía diario)
-        result = aggregate_subdaily(series, target="annual_max")
+            # Fallback a aggregate_subdaily
+            result = aggregate_subdaily(
+                series,
+                target=target_str
+                if target_frequency != "daily"
+                else f"daily_{aggregation_method}",
+                daily_start_hour=daily_start_hour,
+                hydrological_year=hydrological_year,
+                hydrological_start_month=hydrological_start_month,
+            )
+    elif source_freq in (
+        FrequencyType.HOURLY,
+        FrequencyType.MINUTES,
+        FrequencyType.MINUTES_5,
+    ):
+        result = aggregate_subdaily(
+            series,
+            target=target_str,
+            daily_start_hour=daily_start_hour,
+            hydrological_year=hydrological_year,
+            hydrological_start_month=hydrological_start_month,
+        )
     else:
-        # Frecuencia irregular: intentar resample a anual con sum
+        # Frecuencia irregular: intentar resample directo
         try:
-            result = series.resample("YE").agg(aggregation_method)
-            result.index = result.index.year
-            result.index.name = "year"
+            freq_code = {
+                "yearly": "YE",
+                "monthly": "ME",
+                "daily": "D",
+                "hourly": "h",
+            }.get(target_frequency, "YE")
+            result = series.resample(freq_code).agg(aggregation_method)
+            if target_frequency == "yearly":
+                result.index = result.index.year
+                result.index.name = "year"
+            elif target_frequency == "monthly":
+                result.index = result.index.to_period("M")
+                result.index.name = "month"
+            else:
+                result.index.name = target_frequency
         except Exception as e:
-            msg = f"No se pudo agregar serie de frecuencia {freq.value}: {e!s}"
+            msg = f"No se pudo agregar serie de frecuencia {source_freq.value} a {target_frequency}: {e!s}"
             raise ValueError(msg) from e
 
     # Agregar metadatos de transformación
     result._aggregation_performed = True  # noqa: SLF001
-    result._original_frequency = freq.value  # noqa: SLF001
+    result._original_frequency = source_freq.value  # noqa: SLF001
+    result._target_frequency = target_frequency  # noqa: SLF001
     result._aggregation_method = aggregation_method  # noqa: SLF001
+    result._daily_start_hour = daily_start_hour  # noqa: SLF001
 
     return result

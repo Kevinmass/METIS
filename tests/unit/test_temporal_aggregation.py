@@ -366,12 +366,13 @@ class TestAutoAggregate:
         assert result.loc[2021] == 600
 
     def test_invalid_target_frequency(self):
-        """Lanza error si target_frequency no es 'yearly'."""
+        """Lanza error si target_frequency inválido para la serie."""
         dates = pd.date_range("2020-01", periods=12, freq="ME")
         series = pd.Series(range(12), index=dates)
 
-        with pytest.raises(ValueError, match="Solo target_frequency='yearly'"):
-            auto_aggregate(series, target_frequency="monthly")
+        # Mensual -> hourly es inválido (agregación descendente)
+        with pytest.raises(ValueError, match="No se puede agregar desde"):
+            auto_aggregate(series, target_frequency="hourly")
 
     def test_invalid_index_type(self):
         """Lanza error si la serie no tiene DatetimeIndex."""

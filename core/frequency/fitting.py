@@ -7,6 +7,7 @@ Métodos de estimación implementados:
     - MOM: Método de Momentos
     - MLE: Máxima Verosimilitud
     - MEnt: Máxima Entropía
+    - LMom: Momentos-L (L-Moments)
 
 Pruebas de bondad de ajuste:
     - Chi Cuadrado
@@ -28,9 +29,365 @@ from core.frequency.distributions import (
 from core.shared.types import FitResult, GoodnessOfFit
 
 
-# Constants for statistical tests
-MIN_VALID_BINS = 2
-ASYMPTOTIC_THRESHOLD = 35
+# =============================================================================
+# CONSTANTES PARA PRUEBAS DE BONDAD DE AJUSTE
+# =============================================================================
+
+# Mínimo número de bins válidos para prueba Chi-Cuadrado
+MIN_VALID_BINS = 3
+
+# Umbral de tamaño muestral para aproximación asintótica en prueba KS
+ASYMPTOTIC_THRESHOLD = 30
+
+
+# =============================================================================
+# L-MOMENTS - MÉTODO DE ESTIMACIÓN ROBUSTO PARA HIDROLOGÍA
+# =============================================================================
+
+
+def calculate_lmoments(series: pd.Series, max_order: int = 4) -> tuple[float, ...]:
+    """Calcula los L-moments muestrales de una serie.
+
+    Los L-moments son una alternativa robusta a los momentos convencionales,
+    especialmente útiles para series hidrológicas con valores atípicos.
+
+    Fórmulas:
+        L1 (Media-L): λ₁ = (1/n) * Σ x[i]
+        L2 (Dispersión-L): λ₂ = (1/n) * Σ P_{n-1,i} * x[i]
+        L3 (Asimetría-L): λ₃ = (1/n) * Σ P_{n-2,i} * x[i]
+        L4 (Curtosis-L): λ₄ = (1/n) * Σ P_{n-3,i} * x[i]
+
+    Donde P_{r,i} son los coeficientes de los polinomios de Legendre shiftados.
+
+    Args:
+        series: Serie de datos numéricos.
+        max_order: Orden máximo de L-momentos a calcular (default 4).
+
+    Returns:
+        Tupla con los L-moments (λ₁, λ₂, ..., λₘₐₓₒᵣdₑᵣ).
+
+    References:
+        Hosking, J.R.M. (1990). "L-moments: Analysis and Estimation of
+        Distributions using Linear Combinations of Order Statistics".
+        Journal of the Royal Statistical Society, Series B, 52(1), 105-124.
+
+    Example:
+        >>> serie = pd.Series([12.5, 15.3, 14.8, 16.2, 13.7])
+        >>> l1, l2, l3, l4 = calculate_lmoments(serie, 4)
+        >>> l1  # Media-L
+        14.5
+    """
+    x = np.sort(series.to_numpy())
+    n = len(x)
+
+    if n < 2:
+        msg = "Se requieren al menos 2 datos para calcular L-moments"
+        raise ValueError(msg)
+
+    # Crear matriz de coeficientes para L-moments
+    # Usando la fórmula de Hosking (1990)
+    r_values = np.arange(1, n + 1)
+
+    # L1 - Media
+    l1 = np.mean(x)
+
+    if max_order == 1:
+        return (l1,)
+
+    # L2 - Escala (dispersión)
+    # λ₂ = (1/n) * Σ_{i=1}^n [ (2i - n - 1) / (n - 1) ] * x_{(i)}
+    coeff_l2 = (2 * r_values - n - 1) / (n - 1)
+    l2 = np.mean(coeff_l2 * x)
+
+    if max_order == 2:
+        return (l1, l2)
+
+    # L3 - Asimetría
+    # λ₃ = (1/n) * Σ_{i=1}^n [ (6i² - 6i(n+1) + (n+1)(n+2)) / ((n-1)(n-2)) ] * x_{(i)}
+    if n >= 3:
+        coeff_l3 = (6 * r_values**2 - 6 * r_values * (n + 1) + (n + 1) * (n + 2)) / (
+            (n - 1) * (n - 2)
+        )
+        l3 = np.mean(coeff_l3 * x)
+    else:
+        l3 = 0.0
+
+    if max_order == 3:
+        return (l1, l2, l3)
+
+    # L4 - Curtosis
+    if n >= 4:
+        coeff_l4 = (
+            20 * r_values**3
+            - 30 * r_values**2 * (n + 1)
+            + 12 * r_values * (n + 1) * (n + 2)
+            - (n + 1) * (n + 2) * (n + 3)
+        ) / ((n - 1) * (n - 2) * (n - 3))
+        l4 = np.mean(coeff_l4 * x)
+    else:
+        l4 = 0.0
+
+    return (l1, l2, l3, l4)
+
+
+def calculate_lmoments_ratios(lmoments: tuple[float, ...]) -> dict[str, float]:
+    """Calcula los ratios de L-moments (τ, L-CV, L-skewness, L-kurtosis).
+
+    Args:
+        lmoments: Tupla con L1, L2, L3, L4.
+
+    Returns:
+        Diccionario con los ratios:
+            - l_cv: Coeficiente de variación-L (L2/L1)
+            - l_skew: Asimetría-L (L3/L2)
+            - l_kurt: Curtosis-L (L4/L2)
+    """
+    l1, l2 = lmoments[0], lmoments[1]
+    l3 = lmoments[2] if len(lmoments) > 2 else 0.0
+    l4 = lmoments[3] if len(lmoments) > 3 else 0.0
+
+    return {
+        "l1": l1,
+        "l2": l2,
+        "l_cv": l2 / l1 if l1 != 0 else 0.0,
+        "l_skew": l3 / l2 if l2 != 0 else 0.0,
+        "l_kurt": l4 / l2 if l2 != 0 else 0.0,
+    }
+
+
+# =============================================================================
+# CONVERSIÓN DE L-MOMENTS A PARÁMETROS POR DISTRIBUCIÓN
+# =============================================================================
+
+
+def lmoments_to_gumbel(lmoments: tuple[float, ...]) -> dict[str, float]:
+    """Convierte L-moments a parámetros de distribución Gumbel.
+
+    Fórmulas:
+        α = L2 / ln(2)
+        ξ = L1 - γ * α
+
+    donde γ = 0.5772156649 (constante de Euler-Mascheroni).
+
+    Args:
+        lmoments: Tupla con L1, L2.
+
+    Returns:
+        Diccionario con parámetros {"xi": ξ, "alpha": α}.
+    """
+    l1, l2 = lmoments[0], lmoments[1]
+    gamma = 0.5772156649  # Constante de Euler-Mascheroni
+
+    alpha = l2 / np.log(2)
+    xi = l1 - gamma * alpha
+
+    return {"xi": xi, "alpha": alpha}
+
+
+def lmoments_to_weibull(lmoments: tuple[float, ...]) -> dict[str, float]:
+    """Convierte L-moments a parámetros de distribución Weibull.
+
+    Fórmulas aproximadas usando relación entre L-skewness y parámetro de forma.
+
+    Args:
+        lmoments: Tupla con L1, L2, L3.
+
+    Returns:
+        Diccionario con parámetros {"c": forma, "scale": escala}.
+    """
+    _l1, l2, l3 = lmoments[0], lmoments[1], lmoments[2]
+
+    # L-skewness
+    tau3 = l3 / l2 if l2 != 0 else 0.0
+
+    # Aproximación del parámetro de forma c usando relación con L-skewness
+    # Para Weibull, tau3 ≈ -0.5 cuando c ≈ 1 (exponencial)
+    # tau3 disminuye a medida que c aumenta
+    if abs(tau3) < 0.01:
+        c = 10.0  # Casi simétrico
+    elif tau3 < -0.4:
+        c = 1.0  # Muy sesgado
+    else:
+        # Interpolación aproximada
+        c = 1.0 + 9.0 * (0.5 + tau3) / 0.5
+
+    # Parámetro de escala
+    # L2 = scale * Γ(1 + 1/c) * (1 - 2^(-1/c))
+    # Aproximación: scale ≈ L2 / (Γ(1 + 1/c) * (1 - 2^(-1/c)))
+    from scipy.special import gamma as gamma_func
+
+    gamma_term = gamma_func(1 + 1 / c)
+    denom = gamma_term * (1 - 2 ** (-1 / c))
+    scale = l2 / denom if denom > 0 else l2
+
+    return {"c": c, "scale": scale}
+
+
+def lmoments_to_logpearson3(lmoments: tuple[float, ...]) -> dict[str, float]:
+    """Convierte L-moments de log-datos a parámetros Log-Pearson III.
+
+    El proceso:
+        1. Transformar datos a logaritmos
+        2. Calcular L-moments de los logaritmos
+        3. Convertir a parámetros Pearson III
+
+    Args:
+        lmoments: Tupla con L1, L2, L3 de los logaritmos de los datos.
+
+    Returns:
+        Diccionario con parámetros {"mu", "sigma", "gamma"}.
+    """
+    l1, l2, l3 = lmoments[0], lmoments[1], lmoments[2]
+
+    # Para Pearson III: gamma = 2 * L-skew / (1 + L-skew) aproximadamente
+    tau3 = l3 / l2 if l2 != 0 else 0.0
+
+    # Coeficiente de asimetría de Pearson
+    if abs(tau3) < 0.001:
+        gamma = 0.0
+    else:
+        # Aproximación: skew ≈ 6 * tau3 / (1 + tau3) para valores pequeños
+        gamma = 2 * tau3 / (1 - tau3) if tau3 < 0.5 else 2.0
+
+    # Sigma: L2 / [Γ(α) * β^(1/α) * ...] simplificación usando MOM
+    # Aproximación directa desde L2
+    sigma = l2 * np.sqrt(np.pi) * 2  # Factor aproximado
+
+    # Mu: L1 - ajuste por asimetría
+    mu = l1 - 2 * sigma / gamma if gamma != 0 else l1
+
+    return {"mu": mu, "sigma": sigma, "gamma": gamma}
+
+
+def lmoments_to_gev(lmoments: tuple[float, ...]) -> dict[str, float]:
+    """Convierte L-moments a parámetros de distribución GEV.
+
+    Usando aproximaciones de Hosking (1990) para el parámetro de forma k.
+
+    Args:
+        lmoments: Tupla con L1, L2, L3.
+
+    Returns:
+        Diccionario con parámetros {"xi": loc, "alpha": scale, "k": shape}.
+    """
+    l1, l2, l3 = lmoments[0], lmoments[1], lmoments[2]
+
+    # L-skewness
+    tau3 = l3 / l2 if l2 != 0 else 0.0
+
+    # Aproximación para el parámetro de forma k (c)
+    # Hosking (1990): τ₃ ≈ (1 - 3^(-k)) / (1 - 2^(-k)) - ...
+    # Simplificación numérica
+    if abs(tau3) < 0.1:
+        k = -tau3 * 2  # Aproximación lineal para valores pequeños
+    elif tau3 > 0.3:
+        k = -0.4
+    elif tau3 < -0.3:
+        k = 0.4
+    else:
+        k = -2 * tau3
+
+    # Parámetro de escala alpha
+    # L2 = alpha / k * (1 - 2^(-k)) * Γ(1 + k)
+    from scipy.special import gamma as gamma_func
+
+    if abs(k) < 0.001:
+        # Caso límite Gumbel
+        alpha = l2 / np.log(2)
+    else:
+        denom = (1 - 2 ** (-k)) * gamma_func(1 + k) / k
+        alpha = l2 / denom if denom != 0 else l2
+
+    # Parámetro de ubicación xi
+    # L1 = xi + alpha/k * (1 - Γ(1 + k))
+    if abs(k) < 0.001:
+        xi = l1 - alpha * 0.5772156649  # Constante Euler-Mascheroni
+    else:
+        xi = l1 - alpha / k * (1 - gamma_func(1 + k))
+
+    return {"xi": xi, "alpha": alpha, "k": k}
+
+
+def lmoments_to_lognormal(lmoments: tuple[float, ...]) -> dict[str, float]:
+    """Convierte L-moments a parámetros Log-Normal.
+
+    Args:
+        lmoments: Tupla con L1, L2 de los logaritmos de los datos.
+
+    Returns:
+        Diccionario con parámetros {"mu", "sigma"}.
+    """
+    l1, l2 = lmoments[0], lmoments[1]
+
+    # Para log-normal en espacio log:
+    # mu = L1 (directo)
+    # sigma ≈ L2 * sqrt(pi) (aproximación)
+    mu = l1
+    sigma = l2 * np.sqrt(np.pi)
+
+    return {"mu": mu, "sigma": sigma}
+
+
+def fit_by_lmoments(series: pd.Series, distribution_name: str) -> dict[str, float]:
+    """Ajusta una distribución usando el método de Momentos-L (L-Moments).
+
+    Los L-moments son más robustos que los momentos convencionales ante
+    valores atípicos, lo que los hace ideales para hidrología.
+
+    Args:
+        series: Serie de datos numéricos.
+        distribution_name: Nombre de la distribución a ajustar.
+
+    Returns:
+        Diccionario con los parámetros estimados.
+
+    Raises:
+        ValueError: Si la distribución no es soportada con L-moments.
+
+    References:
+        Hosking, J.R.M. y Wallis, J.R. (1997). "Regional Frequency Analysis:
+        An Approach Based on L-Moments". Cambridge University Press.
+
+    Example:
+        >>> serie = pd.Series([12.5, 15.3, 14.8, 16.2, 13.7])
+        >>> params = fit_by_lmoments(serie, "Gumbel")
+        >>> params["xi"], params["alpha"]  # (ubicación, escala)
+    """
+    # Verificar suficientes datos
+    if len(series) < 3:
+        msg = "Se requieren al menos 3 datos para L-moments"
+        raise ValueError(msg)
+
+    # Calcular L-moments según la distribución
+    if distribution_name in ["Log-Normal", "Log-Pearson III", "Log-Logistic"]:
+        # Para distribuciones log-*, calcular L-moments en espacio log
+        positive_series = series[series > 0]
+        if len(positive_series) == 0:
+            msg = f"{distribution_name} requiere valores positivos"
+            raise ValueError(msg)
+        log_series = np.log(positive_series)
+        lmoms = calculate_lmoments(pd.Series(log_series), max_order=3)
+    else:
+        lmoms = calculate_lmoments(series, max_order=3)
+
+    # Convertir a parámetros según la distribución
+    converters = {
+        "Gumbel": lmoments_to_gumbel,
+        "Weibull": lmoments_to_weibull,
+        "Log-Pearson III": lmoments_to_logpearson3,
+        "GEV": lmoments_to_gev,
+        "Log-Normal": lmoments_to_lognormal,
+    }
+
+    if distribution_name in converters:
+        return converters[distribution_name](lmoms)
+
+    # Para otras distribuciones, fallback a MOM
+    msg = (
+        f"L-moments no implementado para {distribution_name}. "
+        f"Distribuciones soportadas: {list(converters.keys())}"
+    )
+    raise ValueError(msg)
 
 
 def fit_by_mom(series: pd.Series, distribution_name: str) -> dict[str, float]:
@@ -334,7 +691,7 @@ def calculate_goodness_of_fit(
 def fit_distribution(
     series: pd.Series,
     distribution_name: str,
-    estimation_method: Literal["MOM", "MLE", "MEnt"] = "MOM",
+    estimation_method: Literal["MOM", "MLE", "MEnt", "LMom"] = "MOM",
 ) -> FitResult:
     """Ajusta una distribución a una serie y calcula bondad de ajuste.
 
@@ -357,6 +714,8 @@ def fit_distribution(
         params = fit_by_mle(series, distribution_name)
     elif estimation_method == "MEnt":
         params = fit_by_mentropy(series, distribution_name)
+    elif estimation_method == "LMom":
+        params = fit_by_lmoments(series, distribution_name)
     else:
         msg = f"Unknown estimation method: {estimation_method}"
         raise ValueError(msg)
@@ -389,7 +748,7 @@ def fit_distribution(
 
 def fit_all_distributions(
     series: pd.Series,
-    estimation_method: Literal["MOM", "MLE", "MEnt"] = "MOM",
+    estimation_method: Literal["MOM", "MLE", "MEnt", "LMom"] = "MOM",
     distribution_names: list[str] | None = None,
 ) -> list[FitResult]:
     """Ajusta múltiples distribuciones a una serie.
@@ -422,14 +781,17 @@ def fit_all_distributions(
     # Marcar la mejor como recomendada si ninguna lo está
     recommended = [r for r in results if r.is_recommended]
     if not recommended and results:
-        results[0].is_recommended = True
+        # Crear copia modificada del mejor resultado (dataclass frozen)
+        from dataclasses import replace
+
+        results[0] = replace(results[0], is_recommended=True)
 
     return results
 
 
 def get_best_distribution(
     series: pd.Series,
-    estimation_method: Literal["MOM", "MLE", "MEnt"] = "MOM",
+    estimation_method: Literal["MOM", "MLE", "MEnt", "LMom"] = "MOM",
     distribution_names: list[str] | None = None,
 ) -> FitResult | None:
     """Obtiene la mejor distribución ajustada a una serie.

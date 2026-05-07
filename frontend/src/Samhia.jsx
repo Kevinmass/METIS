@@ -648,7 +648,7 @@ export default function Samhia({ series, seriesId }) {
             <p>
               Genera un reporte PDF completo de 10 páginas con:
             </p>
-            <ul style={{ marginLeft: "20px", marginBottom: "16px", color: "#94a3b8" }}>
+            <ul style={{ marginLeft: "20px", marginBottom: "16px", color: "#e2e8f0" }}>
               <li>Gráficos de serie temporal, años calendario e hidrológico</li>
               <li>Análisis de datos atípicos y boxplots mensuales/anuales</li>
               <li>Histograma, Q-Q plot y función de autocorrelación</li>
@@ -745,7 +745,7 @@ function TestResultsPanel({ title, tests, description }) {
   return (
     <div>
       <h4 style={{ marginBottom: "12px" }}>{title}</h4>
-      <p style={{ color: "#94a3b8", marginBottom: "12px", fontSize: "0.9rem" }}>
+      <p style={{ color: "#e2e8f0", marginBottom: "12px", fontSize: "0.9rem" }}>
         {description}
       </p>
       <div className="table-wrapper">
@@ -793,7 +793,7 @@ function TestResultsPanel({ title, tests, description }) {
             return null;
           }
           return (
-            <p key={`detail-${key}`} style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "4px" }}>
+            <p key={`detail-${key}`} style={{ fontSize: "0.85rem", color: "#cbd5e1", marginBottom: "4px" }}>
               <strong>{formatTestName(key)}:</strong> {detailText}
             </p>
           );
@@ -804,30 +804,23 @@ function TestResultsPanel({ title, tests, description }) {
 }
 
 /**
- * Panel de análisis de outliers con gráficos.
+ * Panel de análisis de outliers - solo tabla de resultados.
+ * Los gráficos ahora se muestran en la sección de Visualizaciones.
  */
-export function OutliersPanel({ tests, plots, plotsLoading, plotsError, onLoadPlots }) {
+export function OutliersPanel({ tests }) {
   const testEntries = Object.entries(tests);
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
         <h4 style={{ margin: 0 }}>Detección de Atípicos</h4>
-        {!plots && !plotsLoading && (
-          <button
-            type="button"
-            className="button-primary"
-            onClick={onLoadPlots}
-            style={{ padding: "6px 12px", fontSize: "0.85rem" }}
-          >
-            Cargar Gráficos
-          </button>
-        )}
       </div>
-      <p style={{ color: "#94a3b8", marginBottom: "12px", fontSize: "0.9rem" }}>
+      <p style={{ color: "#e2e8f0", marginBottom: "12px", fontSize: "0.9rem" }}>
         Identificación de valores atípicos usando métodos Chow y Kn.
+        <br />
+        <em style={{ color: "#00aaff" }}>Los gráficos de análisis están disponibles en la sección "Visualizaciones y Gráficos".</em>
       </p>
-      
+
       {/* Tabla de resultados */}
       <div className="table-wrapper">
         <table>
@@ -846,10 +839,10 @@ export function OutliersPanel({ tests, plots, plotsLoading, plotsError, onLoadPl
                 <td><strong>{formatTestName(key)}</strong></td>
                 <td>{typeof result.statistic === 'number' ? result.statistic.toFixed(4) : "N/A"}</td>
                 <td>
-                  {Array.isArray(result.critical_value) 
+                  {Array.isArray(result.critical_value)
                     ? `[${result.critical_value.map(v => v.toFixed(2)).join(', ')}]`
-                    : typeof result.critical_value === 'number' 
-                      ? result.critical_value.toFixed(4) 
+                    : typeof result.critical_value === 'number'
+                      ? result.critical_value.toFixed(4)
                       : "N/A"}
                 </td>
                 <td>{typeof result.alpha === 'number' ? result.alpha.toFixed(2) : "N/A"}</td>
@@ -862,145 +855,6 @@ export function OutliersPanel({ tests, plots, plotsLoading, plotsError, onLoadPl
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Información de límites Kn */}
-      {plots?.kn_limits && (
-        <div className="status-card" style={{ marginTop: "16px", marginBottom: "16px" }}>
-          <strong>Límites calculados con método Kn</strong>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px", fontSize: "0.9rem" }}>
-            <div>Media: <strong>{plots.kn_limits.mean?.toFixed(4)}</strong></div>
-            <div>Desv. Estándar: <strong>{plots.kn_limits.std_dev?.toFixed(4)}</strong></div>
-            <div>Factor Kn: <strong>{plots.kn_limits.kn_value?.toFixed(4)}</strong></div>
-            <div>Outliers detectados: <strong>{plots.outliers_detected || 0}</strong></div>
-            <div style={{ color: "#ef4444" }}>Límite Inferior: {plots.kn_limits.lower?.toFixed(4)}</div>
-            <div style={{ color: "#ef4444" }}>Límite Superior: {plots.kn_limits.upper?.toFixed(4)}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Gráficos */}
-      <div style={{ marginTop: "24px" }}>
-        <h5 style={{ marginBottom: "16px", fontSize: "1rem" }}>
-          Visualizaciones de Análisis de Outliers
-        </h5>
-        
-        {plotsLoading && (
-          <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
-            Generando gráficos de outliers con método Kn...
-          </div>
-        )}
-        
-        {plotsError && (
-          <div className="error-banner" style={{ marginBottom: "16px" }}>
-            {plotsError}
-            <button
-              type="button"
-              onClick={onLoadPlots}
-              style={{ marginLeft: "12px", padding: "4px 8px", fontSize: "0.8rem" }}
-            >
-              Reintentar
-            </button>
-          </div>
-        )}
-        
-        {!plots && !plotsLoading && !plotsError && (
-          <div style={{ textAlign: "center", padding: "30px", background: "#1e293b", borderRadius: "8px", marginBottom: "16px" }}>
-            <p style={{ color: "#94a3b8", marginBottom: "12px" }}>
-              Los gráficos de análisis de outliers no se han cargado.
-            </p>
-            <button
-              type="button"
-              className="button-primary"
-              onClick={onLoadPlots}
-              style={{ padding: "8px 16px" }}
-            >
-              Generar Gráficos de Outliers
-            </button>
-          </div>
-        )}
-        
-        {plots?.plot_urls && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-            {/* Gráfico 1: Control Chart */}
-            <div style={{ border: "1px solid #334155", borderRadius: "8px", padding: "16px", background: "#0f172a" }}>
-              <h6 style={{ marginBottom: "12px", fontSize: "0.95rem", color: "#e2e8f0" }}>
-                1. Gráfico de Control (Serie Temporal con Umbrales Kn)
-              </h6>
-              <p style={{ fontSize: "0.85rem", color: "#94a3b8", marginBottom: "12px" }}>
-                Muestra la serie temporal con líneas de límite inferior y superior calculadas con el factor Kn. 
-                Los puntos fuera de estos límites son identificados como atípicos.
-              </p>
-              {plots.plot_urls.control_chart && (
-                <img 
-                  src={plots.plot_urls.control_chart} 
-                  alt="Control Chart"
-                  style={{ width: "100%", borderRadius: "4px" }}
-                />
-              )}
-            </div>
-
-            {/* Gráfico 2: Probability Plot */}
-            <div style={{ border: "1px solid #334155", borderRadius: "8px", padding: "16px", background: "#0f172a" }}>
-              <h6 style={{ marginBottom: "12px", fontSize: "0.95rem", color: "#e2e8f0" }}>
-                2. Gráfico de Probabilidad (Escala Logarítmica)
-              </h6>
-              <p style={{ fontSize: "0.85rem", color: "#94a3b8", marginBottom: "12px" }}>
-                Datos ordenados vs período de retorno en escala logarítmica. 
-                La curva teórica (Log-Normal) y los umbrales Kn permiten identificar visualmente 
-                valores extremos incompatibles con la población.
-              </p>
-              {plots.plot_urls.probability_plot && (
-                <img 
-                  src={plots.plot_urls.probability_plot} 
-                  alt="Probability Plot"
-                  style={{ width: "100%", borderRadius: "4px" }}
-                />
-              )}
-            </div>
-
-            {/* Gráfico 3: Q-Q Plot */}
-            <div style={{ border: "1px solid #334155", borderRadius: "8px", padding: "16px", background: "#0f172a" }}>
-              <h6 style={{ marginBottom: "12px", fontSize: "0.95rem", color: "#e2e8f0" }}>
-                3. Q-Q Plot (Cuantil-Cuantil)
-              </h6>
-              <p style={{ fontSize: "0.85rem", color: "#94a3b8", marginBottom: "12px" }}>
-                Contrasta cuantiles teóricos vs observados. Los valores atípicos se desvían 
-                abruptamente de la línea diagonal (45°), demostrando su incompatibilidad con el resto.
-              </p>
-              {plots.plot_urls.qq_plot && (
-                <img 
-                  src={plots.plot_urls.qq_plot} 
-                  alt="Q-Q Plot"
-                  style={{ width: "100%", borderRadius: "4px" }}
-                />
-              )}
-            </div>
-
-            {/* Gráfico 4: FDP */}
-            <div style={{ border: "1px solid #334155", borderRadius: "8px", padding: "16px", background: "#0f172a" }}>
-              <h6 style={{ marginBottom: "12px", fontSize: "0.95rem", color: "#e2e8f0" }}>
-                4. Función de Densidad de Probabilidad (FDP)
-              </h6>
-              <p style={{ fontSize: "0.85rem", color: "#94a3b8", marginBottom: "12px" }}>
-                Muestra la distribución de los datos mediante KDE (Kernel Density Estimate) e histograma.
-                Los límites Kn aparecen marcados con líneas rojas punteadas, permitiendo identificar 
-                visualmente valores extremos aunque el test estadístico no los detecte formalmente.
-              </p>
-              {plots.plot_urls.fdp_plot ? (
-                <img
-                  src={plots.plot_urls.fdp_plot}
-                  alt="Función de Densidad de Probabilidad"
-                  style={{ width: "100%", borderRadius: "4px" }}
-                />
-              ) : (
-                <div style={{ padding: "20px", background: "#1e293b", borderRadius: "4px", color: "#ef4444" }}>
-                  [DEBUG] Gráfico FDP no disponible. Ver consola para detalles.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

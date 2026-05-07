@@ -31,6 +31,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
+from api.middleware.error_handler import error_handler_middleware
 from api.routers import frequency, reports, temporal, validate
 from api.schemas.validation import HealthResponse
 
@@ -103,6 +104,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Middleware de manejo de errores matemáticos (Epic 4)
+# Debe ir después de CORS para capturar errores de los routers
+app.add_middleware(error_handler_middleware)
 
 # Inclusión de routers
 app.include_router(validate.router, prefix="", tags=["validate"])

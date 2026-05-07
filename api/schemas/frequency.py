@@ -130,8 +130,8 @@ class DistributionFitSchema(BaseModel):
         description="Parametros estimados de la distribucion",
         json_schema_extra={"example": {"mu": 2.3, "sigma": 0.45, "gamma": 0.12}},
     )
-    estimation_method: Literal["MOM", "MLE", "MEnt"] = Field(
-        description="Metodo de estimacion de parametros",
+    estimation_method: Literal["MOM", "MLE", "MEnt", "LMom"] = Field(
+        description="Metodo de estimacion de parametros (MOM: Momentos, MLE: Maxima Verosimilitud, MEnt: Maxima Entropia, LMom: Momentos-L)",
         json_schema_extra={"example": "MOM"},
     )
     goodness_of_fit: GoodnessOfFitSchema = Field(
@@ -166,8 +166,8 @@ class FrequencyFitRequest(BaseModel):
         description="Lista de valores numericos de la serie hidrologica",
         json_schema_extra={"example": [100.5, 120.3, 95.2, 110.8, 105.1]},
     )
-    estimation_method: Literal["MOM", "MLE", "MEnt"] = Field(
-        description="Metodo de estimacion de parametros",
+    estimation_method: Literal["MOM", "MLE", "MEnt", "LMom"] = Field(
+        description="Metodo de estimacion de parametros (MOM: Momentos, MLE: Maxima Verosimilitud, MEnt: Maxima Entropia, LMom: Momentos-L)",
         json_schema_extra={"example": "MOM"},
     )
     distribution_names: list[str] | None = Field(
@@ -202,8 +202,8 @@ class FrequencyFitResponse(BaseModel):
         description="Cantidad de observaciones validas en la serie",
         json_schema_extra={"example": 35},
     )
-    estimation_method: Literal["MOM", "MLE", "MEnt"] = Field(
-        description="Metodo de estimacion utilizado",
+    estimation_method: Literal["MOM", "MLE", "MEnt", "LMom"] = Field(
+        description="Metodo de estimacion utilizado (MOM: Momentos, MLE: Maxima Verosimilitud, MEnt: Maxima Entropia, LMom: Momentos-L)",
         json_schema_extra={"example": "MOM"},
     )
     distributions: list[DistributionFitSchema] = Field(

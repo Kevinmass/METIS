@@ -27,6 +27,13 @@ import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { OutliersPanel } from "./Samhia.jsx";
 
+// Componentes Frutiger Aero
+import { WaterChartBox, GlassPanel, AquaButton, ToastContainer } from "./components";
+import { AquaLineChart, AquaBarChart, AquaAreaChart, AquaScatterChart } from "./components/charts";
+
+// Hook de notificaciones toast (Epic 4)
+import { useToast } from "./hooks/useToast.jsx";
+
 // =============================================================================
 // CONSTANTES DE CONFIGURACIÓN
 // =============================================================================
@@ -38,7 +45,7 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 const MAX_LAG = 10;
 
 /** Métodos de estimación disponibles para análisis de frecuencia */
-const ESTIMATION_METHODS = ["MOM", "MLE", "MEnt"];
+const ESTIMATION_METHODS = ["MOM", "MLE", "MEnt", "LMom"];
 
 /** Distribuciones disponibles para ajuste de frecuencia */
 const AVAILABLE_DISTRIBUTIONS = [
@@ -520,6 +527,12 @@ function serieToCsv(series) {
  */
 export default function App() {
   // ---------------------------------------------------------------------------
+  // NOTIFICACIONES TOAST (Epic 4)
+  // ---------------------------------------------------------------------------
+
+  const { toasts, removeToast, showSuccess, showError, showWarning, showInfo } = useToast();
+
+  // ---------------------------------------------------------------------------
   // ESTADO GLOBAL - DATOS COMPARTIDOS
   // ---------------------------------------------------------------------------
 
@@ -579,17 +592,28 @@ export default function App() {
   const [rawFileContent, setRawFileContent] = useState(null); // { type: 'csv'|'excel', content: text|buffer }
 
   // ---------------------------------------------------------------------------
-  // ESTADO - PROCESAMIENTO TEMPORAL
+  // ESTADO - PROCESAMIENTO TEMPORAL EXPANDIDO
   // ---------------------------------------------------------------------------
 
   const [temporalProcessingEnabled, setTemporalProcessingEnabled] = useState(false);
+  const [temporalTargetFrequency, setTemporalTargetFrequency] = useState("yearly");
   const [temporalAggregationMethod, setTemporalAggregationMethod] = useState("sum");
   const [temporalHydrologicalYear, setTemporalHydrologicalYear] = useState(false);
   const [temporalHydrologicalStartMonth, setTemporalHydrologicalStartMonth] = useState(10);
+  const [temporalDailyStartHour, setTemporalDailyStartHour] = useState(0);  // Período diario personalizado
   const [temporalProcessingLoading, setTemporalProcessingLoading] = useState(false);
   const [temporalProcessingError, setTemporalProcessingError] = useState("");
   const [temporalProcessingResult, setTemporalProcessingResult] = useState(null);
   const [originalSeries, setOriginalSeries] = useState(null); // Guardar serie original antes de procesar
+  const [availableTargetFrequencies, setAvailableTargetFrequencies] = useState([]);
+
+  // ---------------------------------------------------------------------------
+  // ESTADO - CONFIGURACIÓN DE FRECUENCIA TEMPORAL (parámetro 't')
+  // ---------------------------------------------------------------------------
+
+  const [timeFrequency, setTimeFrequency] = useState("auto"); // 'auto', 'yearly', 'monthly', 'daily', 'hourly', 'custom'
+  const [customTimeInterval, setCustomTimeInterval] = useState(1); // Para frecuencia personalizada
+  const [customTimeUnit, setCustomTimeUnit] = useState("minutes"); // 'minutes', 'hours', 'days'
 
   // ---------------------------------------------------------------------------
   // MEMOIZACIÓN DE CÁLCULOS
@@ -649,7 +673,9 @@ export default function App() {
     setDesignEvent(null);
 
     if (series.length < 3) {
-      setFitError("La serie debe tener al menos 3 valores numéricos.");
+      const msg = "La serie debe tener al menos 3 valores numéricos.";
+      setFitError(msg);
+      showWarning(msg, { title: "Datos insuficientes" });
       return;
     }
 
@@ -667,17 +693,27 @@ export default function App() {
 
       const json = await response.json();
       if (!response.ok) {
-        setFitError(json.detail || "Error al ajustar distribuciones");
+        // Error del middleware de errores matemáticos (Epic 4)
+        const errorMsg = json.message || json.detail || "Error al ajustar distribuciones";
+        const suggestion = json.suggestion || "";
+        setFitError(errorMsg);
+        showError(`${errorMsg}${suggestion ? `. ${suggestion}` : ""}`, {
+          title: json.error_type === "MATH_ERROR" ? "Error matemático" : "Error",
+        });
       } else {
         setFitResults(json);
         if (json.recommended_distribution) {
           setSelectedDistribution(json.recommended_distribution);
         }
+        showSuccess(
+          `Ajuste completado. Mejor distribución: ${json.recommended_distribution?.distribution_name || "N/A"}`,
+          { title: "Análisis de frecuencia" }
+        );
       }
     } catch (error) {
-      setFitError(
-        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
-      );
+      const msg = `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`;
+      setFitError(msg);
+      showError(msg, { title: "Error de conexión" });
     } finally {
       setIsFitting(false);
     }
@@ -693,12 +729,16 @@ export default function App() {
     setDesignEvent(null);
 
     if (!selectedDistribution) {
-      setDesignError("Selecciona una distribución primero.");
+      const msg = "Selecciona una distribución primero.";
+      setDesignError(msg);
+      showWarning(msg, { title: "Distribución requerida" });
       return;
     }
 
     if (returnPeriod <= 0) {
-      setDesignError("El período de retorno debe ser positivo.");
+      const msg = "El período de retorno debe ser positivo.";
+      setDesignError(msg);
+      showWarning(msg, { title: "Período inválido" });
       return;
     }
 
@@ -716,14 +756,23 @@ export default function App() {
 
       const json = await response.json();
       if (!response.ok) {
-        setDesignError(json.detail || "Error al calcular evento de diseño");
+        const errorMsg = json.message || json.detail || "Error al calcular evento de diseño";
+        const suggestion = json.suggestion || "";
+        setDesignError(errorMsg);
+        showError(`${errorMsg}${suggestion ? `. ${suggestion}` : ""}`, {
+          title: "Error en cálculo",
+        });
       } else {
         setDesignEvent(json);
+        showSuccess(
+          `Evento de diseño T=${json.return_period}: ${json.design_value?.toFixed(2) || "N/A"}`,
+          { title: "Cálculo completado" }
+        );
       }
     } catch (error) {
-      setDesignError(
-        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
-      );
+      const msg = `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`;
+      setDesignError(msg);
+      showError(msg, { title: "Error de conexión" });
     } finally {
       setIsCalculatingDesign(false);
     }
@@ -744,7 +793,9 @@ export default function App() {
 
     const validData = series.filter((v) => Number.isFinite(v));
     if (validData.length < 12) {
-      setAnalysisError("La serie debe tener al menos 12 datos válidos para el análisis SAMHIA.");
+      const msg = "La serie debe tener al menos 12 datos válidos para el análisis SAMHIA.";
+      setAnalysisError(msg);
+      showWarning(msg, { title: "Datos insuficientes" });
       return;
     }
 
@@ -768,15 +819,23 @@ export default function App() {
 
       const json = await response.json();
       if (!response.ok) {
-        setAnalysisError(json.detail || "Error al ejecutar análisis SAMHIA");
+        const errorMsg = json.message || json.detail || "Error al ejecutar análisis SAMHIA";
+        const suggestion = json.suggestion || "";
+        setAnalysisError(errorMsg);
+        showError(`${errorMsg}${suggestion ? `. ${suggestion}` : ""}`, {
+          title: "Error en análisis",
+        });
       } else {
         setAnalysisResults(json);
         setSamhiaData(validData);
+        showSuccess("Análisis SAMHIA completado exitosamente", {
+          title: "Análisis completado",
+        });
       }
     } catch (error) {
-      setAnalysisError(
-        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
-      );
+      const msg = `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`;
+      setAnalysisError(msg);
+      showError(msg, { title: "Error de conexión" });
     } finally {
       setIsAnalyzing(false);
     }
@@ -793,11 +852,15 @@ export default function App() {
 
     const validData = series.filter((v) => Number.isFinite(v));
     if (validData.length < 12) {
-      setPdfError("La serie debe tener al menos 12 datos válidos.");
+      const msg = "La serie debe tener al menos 12 datos válidos.";
+      setPdfError(msg);
+      showWarning(msg, { title: "Datos insuficientes" });
       return;
     }
 
     setIsGeneratingPdf(true);
+    showInfo("Generando reporte PDF...", { title: "Procesando", duration: 3000 });
+
     try {
       const analysisDates = dates.length === validData.length
         ? dates
@@ -820,14 +883,20 @@ export default function App() {
 
       const json = await response.json();
       if (!response.ok) {
-        setPdfError(json.detail || "Error al generar PDF");
+        const errorMsg = json.message || json.detail || "Error al generar PDF";
+        setPdfError(errorMsg);
+        showError(errorMsg, { title: "Error al generar PDF" });
       } else {
         setPdfPath(json.pdf_path);
+        showSuccess("Reporte PDF generado exitosamente", {
+          title: "PDF listo",
+          duration: 8000,
+        });
       }
     } catch (error) {
-      setPdfError(
-        `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`
-      );
+      const msg = `No se pudo conectar con el backend. Asegúrate de que FastAPI esté activo en ${API_BASE}`;
+      setPdfError(msg);
+      showError(msg, { title: "Error de conexión" });
     } finally {
       setIsGeneratingPdf(false);
     }
@@ -884,6 +953,7 @@ export default function App() {
 
       if (!response.ok) {
         setPdfError("Error al descargar el PDF");
+        showError("Error al descargar el PDF", { title: "Descarga fallida" });
         return;
       }
 
@@ -896,8 +966,10 @@ export default function App() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      showSuccess("PDF descargado correctamente", { title: "Descarga completada" });
     } catch (error) {
       setPdfError("Error al descargar el PDF");
+      showError("Error al descargar el PDF", { title: "Descarga fallida" });
     }
   };
 
@@ -917,9 +989,13 @@ export default function App() {
     if (!file) return;
     const accepted = ["text/csv", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"];
     if (!file.name.endsWith(".csv") && !file.name.endsWith(".xlsx") && !file.name.endsWith(".xls") && !accepted.includes(file.type)) {
-      setFileError("Solo se permiten archivos CSV o XLSX.");
+      const msg = "Solo se permiten archivos CSV o XLSX.";
+      setFileError(msg);
+      showWarning(msg, { title: "Formato inválido" });
       return;
     }
+
+    showInfo(`Cargando archivo: ${file.name}...`, { title: "Procesando", duration: 2000 });
 
     try {
       if (file.name.endsWith(".csv")) {
@@ -927,13 +1003,18 @@ export default function App() {
         const preview = parseCsvPreview(text, 5);
 
         if (preview.headers.length === 0) {
-          setFileError("El archivo está vacío o no tiene formato válido.");
+          const msg = "El archivo está vacío o no tiene formato válido.";
+          setFileError(msg);
+          showError(msg, { title: "Archivo inválido" });
           return;
         }
 
         // Guardar contenido raw y preview
         setRawFileContent({ type: "csv", content: text });
         setFilePreview(preview);
+        showSuccess(`Archivo CSV cargado: ${preview.headers.length} columnas detectadas`, {
+          title: "Vista previa lista",
+        });
 
         // Sugerir columnas por defecto
         const dateCol = preview.headers.find((h, i) => preview.columnTypes[i] === "date") || preview.headers[0];
@@ -1028,7 +1109,51 @@ export default function App() {
   };
 
   /**
-   * Ejecuta procesamiento temporal (agregación a anual).
+   * Detecta frecuencia original y obtiene targets disponibles para agregación.
+   */
+  const detectAvailableTargets = async () => {
+    if (!dates.length || !series.length) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/temporal/detect-frequency`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dates: dates,
+          values: series,
+        }),
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        // Obtener targets disponibles
+        const targetsResponse = await fetch(`${API_BASE}/temporal/available-targets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dates: dates,
+            values: series,
+          }),
+        });
+        if (targetsResponse.ok) {
+          const targetsJson = await targetsResponse.json();
+          setAvailableTargetFrequencies(targetsJson.available_targets || []);
+        }
+      }
+    } catch (error) {
+      console.error("Error detectando frecuencia:", error);
+    }
+  };
+
+  // Detectar frecuencia cuando cambian los datos
+  useMemo(() => {
+    if (dates.length > 0 && series.length > 0) {
+      detectAvailableTargets();
+    }
+  }, [dates, series]);
+
+  /**
+   * Ejecuta procesamiento temporal (agregación ascendente flexible).
    */
   const handleTemporalProcessing = async () => {
     setTemporalProcessingError("");
@@ -1047,10 +1172,11 @@ export default function App() {
         body: JSON.stringify({
           dates: dates,
           values: series,
-          target_frequency: "yearly",
+          target_frequency: temporalTargetFrequency,
           aggregation_method: temporalAggregationMethod,
           hydrological_year: temporalHydrologicalYear,
           hydrological_start_month: temporalHydrologicalStartMonth,
+          daily_start_hour: temporalDailyStartHour,
         }),
       });
 
@@ -1061,7 +1187,14 @@ export default function App() {
         setTemporalProcessingResult(json);
         // Actualizar serie con datos procesados
         setSeries(json.values);
-        setDates(json.years.map(y => `${y}-06-15`)); // Fecha representativa del año
+        // Actualizar fechas según el tipo de índice resultante
+        if (temporalTargetFrequency === "yearly") {
+          setDates(json.index.map(y => `${y}-06-15`)); // Fecha representativa del año
+        } else if (temporalTargetFrequency === "monthly") {
+          setDates(json.index.map(m => `${m}-15`)); // Fecha representativa del mes
+        } else {
+          setDates(json.index);
+        }
       }
     } catch (error) {
       setTemporalProcessingError(
@@ -1118,7 +1251,7 @@ export default function App() {
           SECCIÓN 1: INGESTA Y RESUMEN DE DATOS
           ================================================================ */}
       <div className="section-grid">
-        <section className="panel">
+        <section className="glass-panel">
           <h2>1. Ingesta de datos</h2>
 
           {/* PASO 1: DROPZONE (upload) */}
@@ -1150,7 +1283,7 @@ export default function App() {
 
           {/* PASO 2: PREVIEW Y SELECCIÓN DE COLUMNAS */}
           {importStep === "preview" && filePreview && (
-            <div className="import-preview-panel">
+            <div className="glass-panel compact">
               <h3>📄 Preview: {seriesId}</h3>
 
               {/* Selector de hoja para Excel */}
@@ -1196,7 +1329,7 @@ export default function App() {
                     <tr>
                       <td
                         colSpan={filePreview.headers.length}
-                        style={{ textAlign: "center", color: "#94a3b8", fontStyle: "italic" }}
+                        style={{ textAlign: "center", color: "#cbd5e1", fontStyle: "italic" }}
                       >
                         ... (más filas)
                       </td>
@@ -1206,7 +1339,7 @@ export default function App() {
               </div>
 
               {/* Leyenda de tipos */}
-              <div style={{ fontSize: "0.8em", color: "#94a3b8", marginTop: "8px" }}>
+              <div style={{ fontSize: "0.8em", color: "#cbd5e1", marginTop: "8px" }}>
                 📅 Fecha | 🔢 Numérica | 📝 Texto
               </div>
 
@@ -1257,7 +1390,7 @@ export default function App() {
               {selectedDateColumn && selectedValueColumn && (
                 <div style={{ marginTop: "16px", padding: "12px", background: "#0f172a", borderRadius: "6px" }}>
                   <strong style={{ fontSize: "0.9em" }}>Preview de importación:</strong>
-                  <div style={{ fontSize: "0.8em", color: "#94a3b8", marginTop: "4px" }}>
+                  <div style={{ fontSize: "0.8em", color: "#cbd5e1", marginTop: "4px" }}>
                     Fecha: <strong style={{ color: "#60a5fa" }}>{selectedDateColumn}</strong> | Valor: <strong style={{ color: "#60a5fa" }}>{selectedValueColumn}</strong>
                   </div>
                 </div>
@@ -1265,12 +1398,12 @@ export default function App() {
 
               {/* Botones de acción */}
               <div className="button-group" style={{ marginTop: "16px" }}>
-                <button type="button" className="button-secondary" onClick={handleCancelImport}>
+                <button type="button" className="aqua-button secondary" onClick={handleCancelImport}>
                   ← Volver
                 </button>
                 <button
                   type="button"
-                  className="button-primary"
+                  className="aqua-button"
                   onClick={handleImport}
                   disabled={!selectedDateColumn || !selectedValueColumn}
                 >
@@ -1280,111 +1413,219 @@ export default function App() {
             </div>
           )}
 
-          {/* PASO 3: PROCESAMIENTO TEMPORAL (OPCIONAL) */}
+          {/* PASO 3: PROCESAMIENTO TEMPORAL EXPANDIDO */}
           {importStep === "process" && (
-            <div className="import-preview-panel">
+            <div className="glass-panel compact">
               <h3>⚙️ Procesamiento Temporal</h3>
 
               {/* Info de datos cargados */}
-              <div style={{ marginBottom: "16px", padding: "12px", background: "#0f172a", borderRadius: "6px" }}>
-                <strong>Datos cargados:</strong>
-                <div style={{ fontSize: "0.9em", color: "#94a3b8", marginTop: "4px" }}>
+              <div className="temporal-controls" style={{ marginBottom: "16px" }}>
+                <strong>📊 Datos cargados</strong>
+                <div style={{ fontSize: "0.9em", color: "#e2e8f0", marginTop: "4px" }}>
                   {dates.length} observaciones desde {dates[0]} hasta {dates[dates.length - 1]}
                 </div>
+                {availableTargetFrequencies.length > 0 && (
+                  <div style={{ fontSize: "0.8em", color: "#60a5fa", marginTop: "8px" }}>
+                    Frecuencias disponibles para agregación: {availableTargetFrequencies.join(", ")}
+                  </div>
+                )}
               </div>
 
-              {/* Toggle para activar procesamiento */}
-              <div style={{ marginBottom: "16px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={temporalProcessingEnabled}
-                    onChange={(e) => setTemporalProcessingEnabled(e.target.checked)}
-                  />
-                  <span>Agregar datos a resolución anual</span>
-                </label>
-                <p style={{ fontSize: "0.8em", color: "#94a3b8", marginTop: "4px", marginLeft: "24px" }}>
-                  Recomendado para series mensuales, diarias o subdiarias. Reduce falsos rechazos en tests estadísticos.
+              {/* CONFIGURACIÓN DE FRECUENCIA TEMPORAL (parámetro 't') */}
+              <div className="temporal-controls" style={{ marginBottom: "16px" }}>
+                <h4 style={{ marginBottom: "12px", color: "#7dd3fc" }}>⏱️ Configuración de Frecuencia Temporal</h4>
+                <p style={{ fontSize: "0.85em", color: "#e2e8f0", marginBottom: "12px" }}>
+                  Define el intervalo temporal de tu serie para los análisis estadísticos.
                 </p>
-              </div>
 
-              {/* Opciones de agregación (solo si está activado) */}
-              {temporalProcessingEnabled && (
-                <div style={{ marginBottom: "16px", padding: "12px", background: "#0f172a", borderRadius: "6px" }}>
-                  <h4 style={{ marginBottom: "12px" }}>Opciones de agregación</h4>
-
-                  {/* Método de agregación */}
-                  <div style={{ marginBottom: "12px" }}>
-                    <label style={{ display: "block", marginBottom: "4px", fontSize: "0.9em" }}>
-                      Método de agregación:
-                    </label>
+                <div className="temporal-controls-row">
+                  <div className="temporal-control-group">
+                    <label>Frecuencia de la serie:</label>
                     <select
-                      value={temporalAggregationMethod}
-                      onChange={(e) => setTemporalAggregationMethod(e.target.value)}
-                      style={{ width: "100%", padding: "6px" }}
+                      value={timeFrequency}
+                      onChange={(e) => setTimeFrequency(e.target.value)}
                     >
-                      <option value="sum">Suma (para precipitación/volumen)</option>
-                      <option value="mean">Promedio (para temperatura/nivel)</option>
-                      <option value="max">Máximo (para caudal pico)</option>
-                      <option value="min">Mínimo</option>
+                      <option value="auto">🔍 Auto-detectar</option>
+                      <option value="yearly">📅 Anual (1 año)</option>
+                      <option value="monthly">📆 Mensual (1 mes)</option>
+                      <option value="daily">📋 Diaria (24 horas)</option>
+                      <option value="hourly">🕐 Horaria (1 hora)</option>
+                      <option value="custom">⚙️ Personalizada...</option>
                     </select>
                   </div>
 
-                  {/* Año hidrológico */}
-                  <div style={{ marginBottom: "12px" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={temporalHydrologicalYear}
-                        onChange={(e) => setTemporalHydrologicalYear(e.target.checked)}
-                      />
-                      <span>Usar año hidrológico</span>
-                    </label>
+                  {timeFrequency === "custom" && (
+                    <>
+                      <div className="temporal-control-group" style={{ flex: "0 0 100px" }}>
+                        <label>Intervalo:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={customTimeInterval}
+                          onChange={(e) => setCustomTimeInterval(Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="temporal-control-group" style={{ flex: "0 0 150px" }}>
+                        <label>Unidad:</label>
+                        <select
+                          value={customTimeUnit}
+                          onChange={(e) => setCustomTimeUnit(e.target.value)}
+                        >
+                          <option value="minutes">Minutos</option>
+                          <option value="hours">Horas</option>
+                          <option value="days">Días</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Toggle para activar agregación */}
+              <div className="temporal-toggle" style={{ marginBottom: "16px" }}>
+                <input
+                  type="checkbox"
+                  checked={temporalProcessingEnabled}
+                  onChange={(e) => setTemporalProcessingEnabled(e.target.checked)}
+                />
+                <span>Agregar datos a mayor resolución temporal</span>
+              </div>
+              <p style={{ fontSize: "0.8em", color: "#cbd5e1", marginTop: "-10px", marginBottom: "16px", marginLeft: "54px" }}>
+                Permite agregar desde una frecuencia menor a una mayor (ej: minutos → horas → días).
+              </p>
+
+              {/* Opciones de agregación ascendente */}
+              {temporalProcessingEnabled && (
+                <div className="temporal-controls">
+                  <h4 style={{ marginBottom: "12px" }}>Opciones de Agregación Ascendente</h4>
+
+                  {/* Frecuencia objetivo */}
+                  <div className="temporal-controls-row">
+                    <div className="temporal-control-group">
+                      <label>Frecuencia objetivo:</label>
+                      <select
+                        value={temporalTargetFrequency}
+                        onChange={(e) => setTemporalTargetFrequency(e.target.value)}
+                      >
+                        {availableTargetFrequencies.includes("yearly") && (
+                          <option value="yearly">📅 Anual</option>
+                        )}
+                        {availableTargetFrequencies.includes("monthly") && (
+                          <option value="monthly">📆 Mensual</option>
+                        )}
+                        {availableTargetFrequencies.includes("daily") && (
+                          <option value="daily">📋 Diaria</option>
+                        )}
+                        {availableTargetFrequencies.includes("hourly") && (
+                          <option value="hourly">🕐 Horaria</option>
+                        )}
+                        {!availableTargetFrequencies.length && (
+                          <option value="yearly">📅 Anual (default)</option>
+                        )}
+                      </select>
+                    </div>
+
+                    <div className="temporal-control-group">
+                      <label>Método de agregación:</label>
+                      <select
+                        value={temporalAggregationMethod}
+                        onChange={(e) => setTemporalAggregationMethod(e.target.value)}
+                      >
+                        <option value="sum">∑ Suma (precipitación/volumen)</option>
+                        <option value="mean">Ø Promedio (temperatura/nivel)</option>
+                        <option value="max">↑ Máximo (caudal pico)</option>
+                        <option value="min">↓ Mínimo</option>
+                      </select>
+                    </div>
                   </div>
 
-                  {/* Mes de inicio del año hidrológico */}
-                  {temporalHydrologicalYear && (
-                    <div style={{ marginBottom: "12px" }}>
-                      <label style={{ display: "block", marginBottom: "4px", fontSize: "0.9em" }}>
-                        Mes de inicio del año hidrológico:
+                  {/* Año hidrológico - siempre visible, aplicable a series agregadas y no agregadas */}
+                  <div className="temporal-controls-row" style={{ marginTop: "12px" }}>
+                    <div className="temporal-control-group">
+                      <label className="temporal-toggle" style={{ padding: 0 }}>
+                        <input
+                          type="checkbox"
+                          checked={temporalHydrologicalYear}
+                          onChange={(e) => setTemporalHydrologicalYear(e.target.checked)}
+                        />
+                        <span>Usar año hidrológico</span>
                       </label>
-                      <select
-                        value={temporalHydrologicalStartMonth}
-                        onChange={(e) => setTemporalHydrologicalStartMonth(Number(e.target.value))}
-                        style={{ width: "100%", padding: "6px" }}
-                      >
-                        <option value={1}>Enero</option>
-                        <option value={2}>Febrero</option>
-                        <option value={3}>Marzo</option>
-                        <option value={4}>Abril</option>
-                        <option value={5}>Mayo</option>
-                        <option value={6}>Junio</option>
-                        <option value={7}>Julio</option>
-                        <option value={8}>Agosto</option>
-                        <option value={9}>Septiembre</option>
-                        <option value={10}>Octubre (default)</option>
-                        <option value={11}>Noviembre</option>
-                        <option value={12}>Diciembre</option>
-                      </select>
+                    </div>
+
+                    {temporalHydrologicalYear && (
+                      <div className="temporal-control-group">
+                        <label>Mes de inicio:</label>
+                        <select
+                          value={temporalHydrologicalStartMonth}
+                          onChange={(e) => setTemporalHydrologicalStartMonth(Number(e.target.value))}
+                        >
+                          <option value={1}>Enero</option>
+                          <option value={2}>Febrero</option>
+                          <option value={3}>Marzo</option>
+                          <option value={4}>Abril</option>
+                          <option value={5}>Mayo</option>
+                          <option value={6}>Junio</option>
+                          <option value={7}>Julio</option>
+                          <option value={8}>Agosto</option>
+                          <option value={9}>Septiembre</option>
+                          <option value={10}>Octubre (default)</option>
+                          <option value={11}>Noviembre</option>
+                          <option value={12}>Diciembre</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Período diario personalizado (solo para agregación diaria desde subdiaria) */}
+                  {(temporalTargetFrequency === "daily" || temporalTargetFrequency === "yearly") &&
+                   availableTargetFrequencies.some(f => ["hourly", "minutes", "5min"].includes(f)) && (
+                    <div className="temporal-controls-row" style={{ marginTop: "12px" }}>
+                      <div className="temporal-control-group">
+                        <label>Período diario personalizado:</label>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <input
+                            type="checkbox"
+                            checked={temporalDailyStartHour !== 0}
+                            onChange={(e) => setTemporalDailyStartHour(e.target.checked ? 9 : 0)}
+                            style={{ width: "auto" }}
+                          />
+                          <span style={{ fontSize: "0.85em", color: "#e2e8f0" }}>
+                            Usar período 24hs personalizado (ej: 09:00 a 09:00)
+                          </span>
+                        </div>
+                      </div>
+
+                      {temporalDailyStartHour !== 0 && (
+                        <div className="temporal-control-group" style={{ flex: "0 0 120px" }}>
+                          <label>Hora de inicio:</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="23"
+                            value={temporalDailyStartHour}
+                            onChange={(e) => setTemporalDailyStartHour(Number(e.target.value))}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {/* Botón procesar */}
                   <button
                     type="button"
-                    className="button-primary"
+                    className="btn-load-plots"
                     onClick={handleTemporalProcessing}
                     disabled={temporalProcessingLoading}
-                    style={{ width: "100%" }}
+                    style={{ width: "100%", marginTop: "16px" }}
                   >
-                    {temporalProcessingLoading ? "Procesando..." : temporalProcessingResult ? "Reprocesar" : "Procesar datos"}
+                    {temporalProcessingLoading ? "⏳ Procesando..." : temporalProcessingResult ? "🔄 Reprocesar" : "▶️ Procesar datos"}
                   </button>
                 </div>
               )}
 
               {/* Error de procesamiento */}
               {temporalProcessingError && (
-                <div className="error-banner" style={{ marginBottom: "16px" }}>
+                <div className="status-banner error" style={{ marginBottom: "16px", marginTop: "16px" }}>
                   {temporalProcessingError}
                 </div>
               )}
@@ -1395,18 +1636,21 @@ export default function App() {
                   <h4 style={{ marginBottom: "8px", color: "#34d399" }}>✓ Procesamiento completado</h4>
                   <div style={{ fontSize: "0.85em" }}>
                     <div><strong>Frecuencia original:</strong> {temporalProcessingResult.original_frequency}</div>
-                    <div><strong>Años resultantes:</strong> {temporalProcessingResult.years.join(", ")}</div>
-                    <div><strong>Observaciones:</strong> {temporalProcessingResult.n_original} → {temporalProcessingResult.n_result}</div>
+                    <div><strong>Frecuencia objetivo:</strong> {temporalProcessingResult.target_frequency}</div>
+                    <div><strong>Resultado:</strong> {temporalProcessingResult.n_original} → {temporalProcessingResult.n_result} observaciones</div>
                     <div><strong>Método:</strong> {temporalProcessingResult.aggregation_method}</div>
+                    {temporalProcessingResult.daily_start_hour > 0 && (
+                      <div><strong>Período diario:</strong> {temporalProcessingResult.daily_start_hour}:00 a {temporalProcessingResult.daily_start_hour}:00</div>
+                    )}
                     {temporalProcessingResult.aggregation_bypass && (
-                      <div style={{ color: "#fbbf24" }}>⚠ Serie ya estaba anualizada (sin cambios)</div>
+                      <div style={{ color: "#fbbf24" }}>⚠ Serie ya estaba en la frecuencia solicitada (sin cambios)</div>
                     )}
                   </div>
 
                   {/* Botón restaurar */}
                   <button
                     type="button"
-                    className="button-secondary"
+                    className="aqua-button secondary"
                     onClick={handleRestoreOriginal}
                     style={{ marginTop: "12px", fontSize: "0.85em" }}
                   >
@@ -1419,14 +1663,14 @@ export default function App() {
               <div className="button-group" style={{ marginTop: "16px" }}>
                 <button
                   type="button"
-                  className="button-secondary"
+                  className="aqua-button secondary"
                   onClick={() => setImportStep("preview")}
                 >
                   ← Volver
                 </button>
                 <button
                   type="button"
-                  className="button-primary"
+                  className="aqua-button"
                   onClick={handleFinishImport}
                 >
                   Continuar al análisis →
@@ -1435,7 +1679,7 @@ export default function App() {
             </div>
           )}
 
-          {fileError ? <div className="error-banner" style={{ marginTop: "12px" }}>{fileError}</div> : null}
+          {fileError ? <div className="status-banner error" style={{ marginTop: "12px" }}>{fileError}</div> : null}
 
           {/* Tabla de datos (siempre visible cuando hay datos) */}
           <div className="table-wrapper">
@@ -1465,7 +1709,7 @@ export default function App() {
                         />
                       </td>
                       <td>
-                        <button type="button" className="button-secondary" onClick={() => removeRow(index)}>
+                        <button type="button" className="aqua-button secondary" onClick={() => removeRow(index)}>
                           Eliminar
                         </button>
                       </td>
@@ -1476,7 +1720,7 @@ export default function App() {
             </table>
           </div>
           <div className="button-group">
-            <button type="button" className="button-secondary" onClick={addRow}>
+            <button type="button" className="aqua-button secondary" onClick={addRow}>
               Agregar fila
             </button>
           </div>
@@ -1485,7 +1729,7 @@ export default function App() {
           </small>
         </section>
 
-        <section className="panel">
+        <section className="glass-panel">
           <h2>2. Resumen de la serie</h2>
           <p>
             Identificador: <strong>{seriesId || "serie_local"}</strong>
@@ -1494,7 +1738,7 @@ export default function App() {
             N de datos: <strong>{series.length}</strong>
           </p>
           {warnings.length > 0 ? (
-            <div className="warning-banner">
+            <div className="status-banner warning">
               <strong>Advertencias detectadas</strong>
               <ul>
                 {warnings.map((warning) => (
@@ -1511,24 +1755,22 @@ export default function App() {
             </div>
           )}
 
-          <div className="panel" style={{ marginTop: "18px" }}>
+          <div className="glass-panel compact" style={{ marginTop: "18px" }}>
             <h3>Gráficos rápidos</h3>
-            <div className="chart-box">
-              <div className="chart-title">Dispersión temporal</div>
+            <WaterChartBox title="Dispersión temporal">
               {series.length >= 2 ? (
                 <ScatterPlot values={series} />
               ) : (
                 <p>Agrega más datos para ver el gráfico.</p>
               )}
-            </div>
-            <div className="chart-box" style={{ marginTop: "18px" }}>
-              <div className="chart-title">Correlograma preliminar</div>
+            </WaterChartBox>
+            <WaterChartBox title="Correlograma preliminar" style={{ marginTop: "18px" }}>
               {series.length >= 4 ? (
                 <Correlogram data={autoCorrelation} band={band} />
               ) : (
                 <p>Necesitas al menos 4 datos para ver autocorrelación.</p>
               )}
-            </div>
+            </WaterChartBox>
           </div>
         </section>
       </div>
@@ -1536,9 +1778,9 @@ export default function App() {
       {/* ================================================================
           SECCIÓN 3: ANÁLISIS SAMHIA Y GENERACIÓN DE REPORTES
           ================================================================ */}
-      <section className="panel">
+      <section className="glass-panel">
         <h2>3. Análisis SAMHIA y Reportes PDF</h2>
-        <p style={{ color: "#94a3b8", marginBottom: "18px" }}>
+        <p style={{ color: "#e2e8f0", marginBottom: "18px" }}>
           Análisis estadístico completo basado en SAMHIA_EST.R con tests detallados y generación de reportes PDF de 10 páginas.
         </p>
 
@@ -1589,7 +1831,7 @@ export default function App() {
             <div className="button-group">
               <button
                 type="button"
-                className="button-primary"
+                className="aqua-button"
                 onClick={handleAnalyzeSamhia}
                 disabled={isAnalyzing || series.length < 12}
               >
@@ -1597,9 +1839,9 @@ export default function App() {
               </button>
             </div>
 
-            {analysisError && <div className="error-banner" style={{ marginTop: "12px" }}>{analysisError}</div>}
+            {analysisError && <div className="status-banner error" style={{ marginTop: "12px" }}>{analysisError}</div>}
 
-            <small style={{ marginTop: "12px", display: "block", color: "#94a3b8" }}>
+            <small style={{ marginTop: "12px", display: "block", color: "#cbd5e1" }}>
               Se requieren al menos 12 datos válidos para el análisis SAMHIA completo.
             </small>
           </div>
@@ -1609,7 +1851,7 @@ export default function App() {
             <p style={{ marginBottom: "12px" }}>
               Genera un reporte PDF completo de 10 páginas con:
             </p>
-            <ul style={{ marginLeft: "20px", marginBottom: "16px", color: "#94a3b8", fontSize: "0.9rem" }}>
+            <ul style={{ marginLeft: "20px", marginBottom: "16px", color: "#e2e8f0", fontSize: "0.9rem" }}>
               <li>Gráficos de serie temporal, años calendario e hidrológico</li>
               <li>Análisis de datos atípicos y boxplots mensuales/anuales</li>
               <li>Histograma, Q-Q plot y función de autocorrelación</li>
@@ -1620,7 +1862,7 @@ export default function App() {
             <div className="button-group">
               <button
                 type="button"
-                className="button-primary"
+                className="aqua-button"
                 onClick={handleGeneratePdf}
                 disabled={isGeneratingPdf || series.length < 12}
               >
@@ -1630,7 +1872,7 @@ export default function App() {
               {pdfPath && (
                 <button
                   type="button"
-                  className="button-secondary"
+                  className="aqua-button secondary"
                   onClick={handleDownloadPdf}
                 >
                   Descargar PDF
@@ -1638,11 +1880,11 @@ export default function App() {
               )}
             </div>
 
-            {pdfError && <div className="error-banner" style={{ marginTop: "12px" }}>{pdfError}</div>}
+            {pdfError && <div className="status-banner error" style={{ marginTop: "12px" }}>{pdfError}</div>}
 
             {pdfPath && (
-              <div className="status-card accepted" style={{ marginTop: "12px" }}>
-                <span className="pill accepted">PDF generado exitosamente</span>
+              <div className="status-card" style={{ marginTop: "12px" }}>
+                <span className="status-pill accepted">PDF generado exitosamente</span>
                 <p style={{ marginTop: "8px", fontSize: "0.9rem" }}>
                   Ruta: {pdfPath}
                 </p>
@@ -1710,10 +1952,6 @@ export default function App() {
             {activeSamhiaTab === "outliers" && (
               <OutliersPanel
                 tests={analysisResults.outliers}
-                plots={outlierPlots}
-                plotsLoading={outlierPlotsLoading}
-                plotsError={outlierPlotsError}
-                onLoadPlots={handleLoadOutlierPlots}
               />
             )}
           </div>
@@ -1723,9 +1961,9 @@ export default function App() {
       {/* ================================================================
           SECCIÓN 4: ANÁLISIS DE FRECUENCIA
           ================================================================ */}
-      <section className="panel">
+      <section className="glass-panel">
         <h2>4. Análisis de Frecuencia</h2>
-        <p style={{ color: "#94a3b8", marginBottom: "18px" }}>
+        <p style={{ color: "#e2e8f0", marginBottom: "18px" }}>
           Ajusta distribuciones de probabilidad a tu serie y calcula eventos de diseño.
         </p>
 
@@ -1782,7 +2020,7 @@ export default function App() {
             <div className="button-group">
               <button
                 type="button"
-                className="button-primary"
+                className="aqua-button"
                 onClick={handleFit}
                 disabled={isFitting || selectedDistributions.length === 0}
               >
@@ -1790,7 +2028,7 @@ export default function App() {
               </button>
             </div>
 
-            {fitError && <div className="error-banner" style={{ marginTop: "12px" }}>{fitError}</div>}
+            {fitError && <div className="status-banner error" style={{ marginTop: "12px" }}>{fitError}</div>}
           </div>
 
           {/* Panel de resultados de ajuste */}
@@ -1801,10 +2039,10 @@ export default function App() {
                   <strong>Distribución recomendada</strong>
                   {fitResults.recommended_distribution ? (
                     <>
-                      <p className="pill accepted" style={{ marginTop: "8px" }}>
+                      <span className="status-pill accepted" style={{ marginTop: "8px", display: "inline-flex" }}>
                         {fitResults.recommended_distribution.distribution_name}
-                      </p>
-                      <p style={{ marginTop: "8px", fontSize: "0.9rem", color: "#94a3b8" }}>
+                      </span>
+                      <p style={{ marginTop: "8px", fontSize: "0.9rem", color: "#e2e8f0" }}>
                         Método: {fitResults.estimation_method} | N: {fitResults.n}
                       </p>
                     </>
@@ -1851,7 +2089,7 @@ export default function App() {
               </div>
               <button
                 type="button"
-                className="button-primary"
+                className="aqua-button"
                 onClick={handleDesignEvent}
                 disabled={isCalculatingDesign}
               >
@@ -1859,7 +2097,7 @@ export default function App() {
               </button>
             </div>
 
-            {designError && <div className="error-banner" style={{ marginTop: "12px" }}>{designError}</div>}
+            {designError && <div className="status-banner error" style={{ marginTop: "12px" }}>{designError}</div>}
 
             {designEvent && (
               <div className="status-card" style={{ marginTop: "18px" }}>
@@ -1893,6 +2131,145 @@ export default function App() {
           </div>
         )}
       </section>
+
+      {/* ================================================================
+          SECCIÓN 5: VISUALIZACIONES Y GRÁFICOS (separada de Outliers)
+          ================================================================ */}
+      {analysisResults && (
+        <section className="glass-panel visualizations-section">
+          <h2>5. Visualizaciones y Gráficos</h2>
+          <p style={{ color: "#e2e8f0", marginBottom: "18px" }}>
+            Gráficos estadísticos generados desde el análisis SAMHIA.
+          </p>
+
+          <div className="visualizations-grid">
+            {/* Gráficos de Outliers con botón de carga */}
+            <div className="water-chart-box" style={{ gridColumn: "1 / -1" }}>
+              <div className="chart-title">
+                Análisis de Atípicos (Outliers)
+                {!outlierPlots && !outlierPlotsLoading && (
+                  <button
+                    type="button"
+                    className="btn-load-plots"
+                    onClick={handleLoadOutlierPlots}
+                    style={{ marginLeft: "16px", padding: "6px 14px", fontSize: "0.85rem" }}
+                  >
+                    Generar Gráficos
+                  </button>
+                )}
+              </div>
+              <div className="chart-content">
+                {outlierPlotsLoading && (
+                  <div style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
+                    Generando gráficos de outliers...
+                  </div>
+                )}
+                {outlierPlotsError && (
+                  <div className="error-banner" style={{ marginBottom: "16px" }}>
+                    {outlierPlotsError}
+                    <button
+                      type="button"
+                      onClick={handleLoadOutlierPlots}
+                      style={{ marginLeft: "12px", padding: "4px 8px", fontSize: "0.8rem" }}
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                )}
+                {outlierPlots?.plot_urls && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(500px, 1fr))", gap: "20px" }}>
+                    {/* Control Chart */}
+                    {outlierPlots.plot_urls.control_chart && (
+                      <div>
+                        <h6 style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#334155" }}>
+                          Gráfico de Control (Umbrales Kn)
+                        </h6>
+                        <img
+                          src={outlierPlots.plot_urls.control_chart}
+                          alt="Control Chart"
+                          style={{ width: "100%", borderRadius: "6px", border: "1px solid #e2e8f0" }}
+                        />
+                      </div>
+                    )}
+                    {/* Probability Plot */}
+                    {outlierPlots.plot_urls.probability_plot && (
+                      <div>
+                        <h6 style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#334155" }}>
+                          Gráfico de Probabilidad
+                        </h6>
+                        <img
+                          src={outlierPlots.plot_urls.probability_plot}
+                          alt="Probability Plot"
+                          style={{ width: "100%", borderRadius: "6px", border: "1px solid #e2e8f0" }}
+                        />
+                      </div>
+                    )}
+                    {/* Q-Q Plot */}
+                    {outlierPlots.plot_urls.qq_plot && (
+                      <div>
+                        <h6 style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#334155" }}>
+                          Q-Q Plot
+                        </h6>
+                        <img
+                          src={outlierPlots.plot_urls.qq_plot}
+                          alt="Q-Q Plot"
+                          style={{ width: "100%", borderRadius: "6px", border: "1px solid #e2e8f0" }}
+                        />
+                      </div>
+                    )}
+                    {/* FDP Plot */}
+                    {outlierPlots.plot_urls.fdp_plot && (
+                      <div>
+                        <h6 style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#334155" }}>
+                          Función de Densidad de Probabilidad
+                        </h6>
+                        <img
+                          src={outlierPlots.plot_urls.fdp_plot}
+                          alt="FDP"
+                          style={{ width: "100%", borderRadius: "6px", border: "1px solid #e2e8f0" }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!outlierPlots && !outlierPlotsLoading && !outlierPlotsError && (
+                  <div style={{ textAlign: "center", padding: "30px" }}>
+                    <p style={{ color: "#64748b", marginBottom: "12px" }}>
+                      Los gráficos de análisis de outliers no se han cargado.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Gráficos rápidos de la serie */}
+            <div className="water-chart-box">
+              <div className="chart-title">Dispersión Temporal</div>
+              <div className="chart-content">
+                {series.length >= 2 ? (
+                  <ScatterPlot values={series} />
+                ) : (
+                  <p style={{ color: "#64748b" }}>Agrega más datos para ver el gráfico.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="water-chart-box">
+              <div className="chart-title">Correlograma Preliminar</div>
+              <div className="chart-content">
+                {series.length >= 4 ? (
+                  <Correlogram data={autoCorrelation} band={band} />
+                ) : (
+                  <p style={{ color: "#64748b" }}>Necesitas al menos 4 datos para ver autocorrelación.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Contenedor de notificaciones Toast (Epic 4) */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
     </div>
   );
@@ -2009,7 +2386,7 @@ function Correlogram({ data, band }) {
               stroke="#7dd3fc"
               strokeWidth="10"
             />
-            <text x={x} y={height - 12} fill="#94a3b8" fontSize="12" textAnchor="middle">
+            <text x={x} y={height - 12} fill="#cbd5e1" fontSize="12" textAnchor="middle">
               {item.lag}
             </text>
           </g>
@@ -2054,7 +2431,7 @@ function DistributionResult({ distribution, isSelected, onSelect }) {
           <div style={{ marginBottom: "12px" }}>
             <button
               type="button"
-              className="button-secondary"
+              className="aqua-button secondary"
               onClick={onSelect}
               style={{ fontSize: "0.9rem", padding: "8px 14px" }}
             >
@@ -2166,7 +2543,7 @@ function TestResultsPanel({ title, tests, description }) {
     return (
       <div>
         <h4 style={{ marginBottom: "12px" }}>{title}</h4>
-        <p style={{ color: "#94a3b8" }}>No hay resultados disponibles.</p>
+        <p style={{ color: "#e2e8f0" }}>No hay resultados disponibles.</p>
       </div>
     );
   }
@@ -2174,7 +2551,7 @@ function TestResultsPanel({ title, tests, description }) {
   return (
     <div>
       <h4 style={{ marginBottom: "12px" }}>{title}</h4>
-      <p style={{ color: "#94a3b8", marginBottom: "12px", fontSize: "0.9rem" }}>
+      <p style={{ color: "#e2e8f0", marginBottom: "12px", fontSize: "0.9rem" }}>
         {description}
       </p>
       <div className="table-wrapper">

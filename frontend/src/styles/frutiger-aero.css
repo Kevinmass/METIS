@@ -1,0 +1,430 @@
+/**
+ * Sistema de Diseño METIS - Frutiger Aero
+ *
+ * Estética: Glassmorphism acuático con degradados azul-cian,
+ * reflejos de luz, y sensación de profundidad líquida.
+ *
+ * Características:
+ *   - Degradados dinámicos de fondo
+ *   - Efectos acrílicos/crystal con backdrop-filter
+ *   - Bordes luminosos y brillos sutiles
+ *   - Colores vívidos acuáticos
+ */
+
+/* ==========================================================================
+   VARIABLES CSS - PALETA FRUTIGER AERO
+   ========================================================================== */
+
+:root {
+  /* Colores primarios - Agua */
+  --aqua-primary: #00d4ff;
+  --aqua-secondary: #0080ff;
+  --aqua-dark: #0066cc;
+  --aqua-light: #80e5ff;
+  
+  /* Colores de fondo */
+  --bg-gradient-start: #0a1628;
+  --bg-gradient-mid: #0d2847;
+  --bg-gradient-end: #0a3d62;
+  
+  /* Superficies glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-highlight: rgba(255, 255, 255, 0.25);
+  
+  /* Estados */
+  --success: #00ff88;
+  --warning: #ffcc00;
+  --error: #ff3366;
+  --info: #00ccff;
+  
+  /* Texto */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.85);
+  --text-muted: rgba(255, 255, 255, 0.6);
+  
+  /* Sombras */
+  --shadow-soft: 0 8px 32px rgba(0, 100, 200, 0.3);
+  --shadow-glow: 0 0 30px rgba(0, 212, 255, 0.4);
+  --shadow-inner: inset 0 2px 10px rgba(255, 255, 255, 0.1);
+  
+  /* Bordes */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  
+  /* Transiciones */
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   BASE Y RESET FRUTIGER AERO
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+
+body {
+  min-height: 100vh;
+  background: url('/Background.png') no-repeat center center fixed;
+  background-size: cover;
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Capa overlay para mejorar legibilidad del contenido sobre la imagen */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 22, 40, 0.75);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+  z-index: -1;
+}
+
+a {
+  color: var(--aqua-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--aqua-light);
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ==========================================================================
+   LAYOUT - APP SHELL FRUTIGER AERO
+   ========================================================================== */
+
+.app-shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  position: relative;
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: 32px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 3.5rem);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--aqua-primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 40px rgba(0, 212, 255, 0.3);
+}
+
+.page-header p {
+  margin: 8px 0 0;
+  max-width: 48rem;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+}
+
+/* ==========================================================================
+   NAVEGACIÓN POR TABS - FRUTIGER AERO
+   ========================================================================== */
+
+.tab-navigation {
+  display: flex;
+  gap: 8px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 8px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft);
+}
+
+.tab-button {
+  border: none;
+  color: var(--text-muted);
+  background: transparent;
+  padding: 12px 24px;
+  border-radius: var(--radius-lg);
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.tab-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.tab-button:hover {
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.tab-button:hover::before {
+  opacity: 1;
+}
+
+.tab-button.active {
+  color: var(--text-primary);
+  background: linear-gradient(135deg, var(--aqua-primary), var(--aqua-secondary));
+  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.4);
+}
+
+.tab-button.active::before {
+  opacity: 0.2;
+}
+
+/* ==========================================================================
+   GRID Y SECCIONES
+   ========================================================================== */
+
+.section-grid {
+  display: grid;
+  gap: 24px;
+}
+
+@media (min-width: 900px) {
+  .section-grid {
+    grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.2fr);
+  }
+}
+
+/* ==========================================================================
+   FORMULARIOS - INPUTS FRUTIGER AERO
+   ========================================================================== */
+
+input,
+textarea,
+select {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--text-primary);
+  padding: 14px 16px;
+  font-size: 0.95rem;
+  transition: all var(--transition-fast);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--aqua-primary);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.2), var(--shadow-inner);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ==========================================================================
+   GRUPOS DE BOTONES
+   ========================================================================== */
+
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* ==========================================================================
+   BANNERS DE ESTADO
+   ========================================================================== */
+
+.status-banner {
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid;
+}
+
+.status-banner.warning {
+  background: rgba(255, 204, 0, 0.1);
+  border-color: rgba(255, 204, 0, 0.3);
+  color: #ffdd44;
+}
+
+.status-banner.error {
+  background: rgba(255, 51, 102, 0.1);
+  border-color: rgba(255, 51, 102, 0.3);
+  color: #ff6688;
+}
+
+.status-banner.success {
+  background: rgba(0, 255, 136, 0.1);
+  border-color: rgba(0, 255, 136, 0.3);
+  color: #66ffaa;
+}
+
+/* ==========================================================================
+   TABLAS - ESTILO FRUTIGER AERO
+   ========================================================================== */
+
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  margin-top: 16px;
+}
+
+.table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-wrapper th,
+.table-wrapper td {
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.table-wrapper th {
+  color: var(--aqua-primary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.table-wrapper td {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.table-wrapper tr:hover td {
+  background: rgba(0, 212, 255, 0.05);
+}
+
+/* ==========================================================================
+   ACORDEÓN - ESTILO FRUTIGER AERO
+   ========================================================================== */
+
+.accordion {
+  border-top: 1px solid var(--glass-border);
+}
+
+.accordion-item {
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.accordion-button {
+  width: 100%;
+  padding: 18px 16px;
+  text-align: left;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.accordion-button:hover {
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.accordion-button.selected {
+  background: rgba(0, 212, 255, 0.15);
+  border-left: 3px solid var(--aqua-primary);
+}
+
+.accordion-panel {
+  padding: 0 16px 20px;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   FILE DROPZONE - ESTILO FRUTIGER AERO
+   ========================================================================== */
+
+.file-dropzone {
+  position: relative;
+  border: 2px dashed var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: 40px 32px;
+  text-align: center;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.file-dropzone:hover {
+  border-color: var(--aqua-primary);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.file-dropzone.dragover {
+  border-color: var(--aqua-primary);
+  border-style: solid;
+  background: rgba(0, 212, 255, 0.12);
+  box-shadow: var(--shadow-glow);
+}
+
+.file-dropzone p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.file-dropzone strong {
+  display: block;
+  margin: 12px 0 6px;
+  color: var(--aqua-primary);
+  font-size: 1.1rem;
+}

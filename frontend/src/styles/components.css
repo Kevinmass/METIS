@@ -1,0 +1,786 @@
+/**
+ * COMPONENTES FRUTIGER AERO - METIS
+ *
+ * Estilos específicos para componentes reutilizables:
+ * - GlassPanel
+ * - AquaButton
+ * - WaterChartBox (animaciones CSS)
+ * - StatusCards
+ */
+
+/* ==========================================================================
+   GLASS PANEL - PANEL ACRÍLICO
+   ========================================================================== */
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-soft);
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+}
+
+.glass-panel:hover {
+  border-color: var(--glass-highlight);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-2px);
+}
+
+/* Variantes de GlassPanel */
+.glass-panel.compact {
+  padding: 16px;
+}
+
+.glass-panel.large {
+  padding: 32px;
+  border-radius: var(--radius-xl);
+}
+
+.glass-panel.glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   AQUA BUTTON - BOTÓN CON EFECTO GLOSS
+   ========================================================================== */
+
+.aqua-button {
+  position: relative;
+  border: none;
+  color: white;
+  background: linear-gradient(135deg, var(--aqua-primary) 0%, var(--aqua-secondary) 100%);
+  padding: 14px 28px;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all var(--transition-fast);
+  box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+}
+
+/* Efecto gloss en la parte superior */
+.aqua-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3) 0%, transparent 100%);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  pointer-events: none;
+}
+
+/* Efecto de brillo al hover */
+.aqua-button::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+}
+
+.aqua-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 212, 255, 0.5);
+}
+
+.aqua-button:hover::after {
+  opacity: 1;
+}
+
+.aqua-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(0, 212, 255, 0.3);
+}
+
+.aqua-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Variantes de AquaButton */
+.aqua-button.secondary {
+  background: transparent;
+  border: 1px solid var(--aqua-primary);
+  color: var(--aqua-primary);
+  box-shadow: none;
+}
+
+.aqua-button.secondary::before {
+  display: none;
+}
+
+.aqua-button.secondary:hover {
+  background: rgba(0, 212, 255, 0.1);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.aqua-button.danger {
+  background: linear-gradient(135deg, #ff3366 0%, #cc0044 100%);
+  box-shadow: 0 4px 15px rgba(255, 51, 102, 0.3);
+}
+
+.aqua-button.danger:hover {
+  box-shadow: 0 8px 25px rgba(255, 51, 102, 0.5);
+}
+
+.aqua-button.success {
+  background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
+  box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+}
+
+.aqua-button.success:hover {
+  box-shadow: 0 8px 25px rgba(0, 255, 136, 0.5);
+}
+
+.aqua-button.small {
+  padding: 10px 18px;
+  font-size: 0.85rem;
+}
+
+.aqua-button.large {
+  padding: 18px 36px;
+  font-size: 1.05rem;
+}
+
+/* ==========================================================================
+   WATER CHART BOX - CONTENEDOR CON EFECTO RIPPLE
+   ========================================================================== */
+
+.water-chart-box {
+  position: relative;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  box-shadow: var(--shadow-soft);
+  transition: all var(--transition-fast);
+  overflow: visible;
+}
+
+/* Ondas del ripple - ::before y ::after */
+.water-chart-box::before,
+.water-chart-box::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius-xl) + 2px);
+  border: 3px solid var(--aqua-primary);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Primera onda */
+.water-chart-box::before {
+  animation: none;
+}
+
+/* Segunda onda (con delay) */
+.water-chart-box::after {
+  animation: none;
+  border-color: var(--aqua-secondary);
+}
+
+/* Activar animaciones en hover */
+.water-chart-box:hover::before {
+  animation: ripple-wave 1.8s ease-out;
+}
+
+.water-chart-box:hover::after {
+  animation: ripple-wave-second 2s ease-out 0.4s;
+}
+
+/* Título del gráfico */
+.water-chart-box .chart-title {
+  margin: 0 0 16px 0;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.water-chart-box .chart-title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(180deg, var(--aqua-primary), var(--aqua-secondary));
+  border-radius: 2px;
+}
+
+/* Contenido del gráfico */
+.water-chart-box .chart-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Hover efecto adicional */
+.water-chart-box:hover {
+  border-color: var(--aqua-primary);
+  box-shadow: var(--shadow-glow);
+}
+
+/* ==========================================================================
+   STATUS CARDS - TARJETAS DE ESTADO
+   ========================================================================== */
+
+.status-card {
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid var(--glass-border);
+  transition: all var(--transition-fast);
+}
+
+.status-card:hover {
+  border-color: var(--glass-highlight);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-soft);
+}
+
+.status-card strong {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Pill de estado */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  width: fit-content;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid;
+}
+
+.status-pill::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Estados del pill */
+.status-pill.accepted {
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--success);
+  border-color: rgba(0, 255, 136, 0.3);
+}
+
+.status-pill.accepted::before {
+  background: var(--success);
+  box-shadow: 0 0 10px var(--success);
+}
+
+.status-pill.rejected {
+  background: rgba(255, 51, 102, 0.15);
+  color: var(--error);
+  border-color: rgba(255, 51, 102, 0.3);
+}
+
+.status-pill.rejected::before {
+  background: var(--error);
+  box-shadow: 0 0 10px var(--error);
+}
+
+.status-pill.inconclusive {
+  background: rgba(255, 204, 0, 0.15);
+  color: var(--warning);
+  border-color: rgba(255, 204, 0, 0.3);
+}
+
+.status-pill.inconclusive::before {
+  background: var(--warning);
+  box-shadow: 0 0 10px var(--warning);
+}
+
+/* Grid de status cards */
+.status-grid {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 720px) {
+  .status-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .status-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ==========================================================================
+   LOADER - SPINNER ACUÁTICO
+   ========================================================================== */
+
+.aqua-loader {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--glass-border);
+  border-top-color: var(--aqua-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Spinner pequeño */
+.aqua-loader.small {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+/* ==========================================================================
+   DIVIDER - SEPARADOR CON GRADIENTE
+   ========================================================================== */
+
+.aqua-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+  margin: 24px 0;
+  border: none;
+}
+
+/* ==========================================================================
+   TOOLTIP - ESTILO FRUTIGER AERO
+   ========================================================================== */
+
+.aqua-tooltip {
+  position: absolute;
+  background: rgba(10, 30, 50, 0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-soft);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-fast);
+  transform: translateY(5px);
+}
+
+.aqua-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* ==========================================================================
+   ASYMMETRIC DISTRIBUTIONS CHART - GRÁFICO DE DISTRIBUCIONES
+   ========================================================================== */
+
+.asymmetric-chart-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.distribution-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(10, 20, 35, 0.5);
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+}
+
+.dist-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(15, 30, 50, 0.8);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.dist-toggle:hover {
+  background: rgba(30, 58, 95, 0.5);
+  transform: translateY(-1px);
+}
+
+.dist-toggle.active {
+  border-width: 2px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.color-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.dist-name {
+  font-size: 0.8rem;
+}
+
+.chart-wrapper {
+  background: var(--glass-bg);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--glass-border);
+}
+
+.pdf-chart {
+  width: 100%;
+  height: auto;
+  min-height: 350px;
+}
+
+.dist-info-panel {
+  background: rgba(15, 30, 50, 0.9);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 8px;
+}
+
+.dist-info-panel h4 {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+}
+
+.dist-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.dist-params {
+  font-size: 0.85rem;
+}
+
+.dist-params code {
+  background: rgba(30, 58, 95, 0.5);
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+  color: #60a5fa;
+}
+
+/* ==========================================================================
+   FREQUENCY THEORY INFO - INFORMACIÓN TEÓRICA
+   ========================================================================== */
+
+.theory-info-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.theory-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.theory-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.4rem;
+}
+
+.theory-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 8px 0 0 0;
+}
+
+.accordion-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.theory-accordion {
+  background: rgba(10, 20, 35, 0.5);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.theory-accordion.open {
+  border-color: var(--aqua-primary);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
+}
+
+.accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.accordion-header:hover {
+  background: rgba(30, 58, 95, 0.3);
+}
+
+.accordion-icon {
+  font-size: 1.3rem;
+}
+
+.accordion-title {
+  flex: 1;
+}
+
+.accordion-toggle {
+  font-size: 1.5rem;
+  color: var(--aqua-primary);
+  font-weight: 300;
+}
+
+.accordion-content {
+  padding: 0 20px 20px 20px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Cards Grid */
+.cards-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.distributions-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.metrics-grid {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.parameters-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.design-events-grid {
+  grid-template-columns: 1fr;
+}
+
+/* Theory Cards */
+.theory-card {
+  background: rgba(15, 30, 50, 0.6);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.theory-card:hover {
+  border-color: var(--glass-highlight);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-soft);
+}
+
+.card-title {
+  margin: 0 0 10px 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.param-symbol {
+  font-size: 0.85rem;
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+
+.card-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.card-section {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 10px;
+}
+
+.card-section strong {
+  color: var(--text-primary);
+}
+
+.card-section ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+}
+
+.card-section li {
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.card-note {
+  font-size: 0.85rem;
+  color: #fbbf24;
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(251, 191, 36, 0.1);
+  border-left: 3px solid #fbbf24;
+  border-radius: 0 6px 6px 0;
+}
+
+.formula-box {
+  background: rgba(30, 58, 95, 0.5);
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+.formula-box code {
+  color: #34d399;
+  font-size: 1rem;
+}
+
+/* Feature lists */
+.feature-list li::marker {
+  color: var(--aqua-primary);
+}
+
+.criteria-list li::marker {
+  color: #fbbf24;
+}
+
+.example-list li::marker {
+  color: #a78bfa;
+}
+
+.consideration-list li::marker {
+  color: #f87171;
+}
+
+.application-list li::marker {
+  color: #22d3ee;
+}
+
+.interpretation-list li::marker {
+  color: #fb923c;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .distribution-toggles {
+    justify-content: center;
+  }
+
+  .dist-toggle {
+    padding: 6px 10px;
+  }
+
+  .accordion-header {
+    padding: 14px 16px;
+  }
+
+  .accordion-content {
+    padding: 0 16px 16px 16px;
+  }
+}
+
+/* ==========================================================================
+   THEORY SECTION - SECCIONES DE TEORÍA
+   ========================================================================== */
+
+.theory-section {
+  margin-bottom: 24px;
+}
+
+.section-header {
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+}
+
+.section-description {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin: 0;
+}

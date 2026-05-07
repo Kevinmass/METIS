@@ -29,7 +29,9 @@ from core.temporal.aggregation import (
     AggregationMethod,
     FrequencyType,
     auto_aggregate,
+    can_aggregate_to,
     detect_frequency,
+    get_available_targets,
 )
 
 
@@ -37,5 +39,7 @@ __all__ = [
     "AggregationMethod",
     "FrequencyType",
     "auto_aggregate",
+    "can_aggregate_to",
     "detect_frequency",
+    "get_available_targets",
 ]
