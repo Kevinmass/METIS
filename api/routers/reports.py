@@ -93,11 +93,16 @@ def _test_result_to_schema(result) -> TestResultSchema:
     summary="Análisis estadístico completo SAMHIA",
     description=(
         "Ejecuta el pipeline completo de análisis estadístico SAMHIA sobre una "
-        "serie temporal."
+        "serie temporal. Ahora respeta la frecuencia temporal proporcionada: "
+        "los valores críticos y lags se escalan según si los datos son "
+        "anuales, mensuales, diarios, etc."
     ),
 )
 async def analyze_samhia(request: SamhiaAnalysisRequest):
     """Ejecuta análisis estadístico completo y devuelve resultados JSON."""
+    # Extraer frecuencia temporal
+    temporal_frequency = request.temporal_frequency
+
     # Crear DataFrame con validación de fechas
     df = pd.DataFrame(
         {
@@ -128,26 +133,32 @@ async def analyze_samhia(request: SamhiaAnalysisRequest):
         msg = "La serie debe tener al menos 12 datos válidos"
         raise HTTPException(status_code=400, detail=msg)
 
-    # Ejecutar tests
+    # Ejecutar tests CON frecuencia temporal
     independence_results = {
-        "anderson": anderson_test(series, request.alpha),
-        "wald_wolfowitz": wald_wolfowitz_test(series, request.alpha),
-        "durbin_watson": durbin_watson_test(series, request.alpha),
-        "ljung_box": ljung_box_test(series, alpha=request.alpha),
-        "spearman": spearman_test(series, request.alpha),
+        "anderson": anderson_test(series, request.alpha, temporal_frequency),
+        "wald_wolfowitz": wald_wolfowitz_test(
+            series, request.alpha, temporal_frequency
+        ),
+        "durbin_watson": durbin_watson_test(series, request.alpha, temporal_frequency),
+        "ljung_box": ljung_box_test(
+            series, alpha=request.alpha, temporal_frequency=temporal_frequency
+        ),
+        "spearman": spearman_test(series, request.alpha, temporal_frequency),
     }
 
     homogeneity_results = {
-        "helmert": helmert_test(series, request.alpha),
-        "t_student": t_student_test(series, request.alpha),
-        "cramer": cramer_test(series, request.alpha),
-        "mann_whitney": mann_whitney_test(series, request.alpha),
-        "mood": mood_test(series, request.alpha),
+        "helmert": helmert_test(series, request.alpha, temporal_frequency),
+        "t_student": t_student_test(series, request.alpha, temporal_frequency),
+        "cramer": cramer_test(series, request.alpha, temporal_frequency),
+        "mann_whitney": mann_whitney_test(series, request.alpha, temporal_frequency),
+        "mood": mood_test(series, request.alpha, temporal_frequency),
     }
 
     trend_results = {
-        "mann_kendall": mann_kendall_test(series, request.alpha),
-        "kolmogorov_smirnov": kolmogorov_smirnov_trend_test(series, request.alpha),
+        "mann_kendall": mann_kendall_test(series, request.alpha, temporal_frequency),
+        "kolmogorov_smirnov": kolmogorov_smirnov_trend_test(
+            series, request.alpha, temporal_frequency
+        ),
     }
 
     outlier_results = {
@@ -207,6 +218,7 @@ async def analyze_samhia(request: SamhiaAnalysisRequest):
             chow=_test_result_to_schema(outlier_results["chow"]),
             kn=_test_result_to_schema(outlier_results["kn"]),
         ),
+        temporal_frequency=temporal_frequency,
     )
 
 
@@ -251,6 +263,7 @@ async def generate_pdf(request: PDFGenerationRequest):
         report_type=request.report_type,
         author=request.author,
         alpha=request.alpha,
+        temporal_frequency=request.temporal_frequency,
     )
 
     try:
@@ -273,7 +286,6 @@ async def generate_pdf(request: PDFGenerationRequest):
 async def download_pdf(filename: str):
     """Descarga un PDF generado."""
     # Por seguridad, validar que el archivo esté en un directorio permitido
-    # En producción, usar un directorio específico y validar la ruta
     pdf_path = filename  # TODO: Validar y restringir ruta
 
     path_obj = Path(pdf_path)

@@ -13,6 +13,73 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
+# Tipo para frecuencias temporales soportadas
+TemporalFrequency = Literal[
+    "5min", "minutes", "hourly", "daily", "monthly", "yearly", "irregular"
+]
+
+# Factor de escalado: unidades de tiempo por año para cada frecuencia
+# Útil para ajustar parámetros temporales en tests estadísticos
+FREQUENCY_STEPS_PER_YEAR: dict[str, int] = {
+    "5min": 105120,  # 365*24*12 (12 intervalos de 5min por hora)
+    "minutes": 525600,  # 365*24*60
+    "hourly": 8760,  # 365*24
+    "daily": 365,
+    "monthly": 12,
+    "yearly": 1,
+    "irregular": 1,
+}
+
+# Descripciones legibles para cada frecuencia
+FREQUENCY_DESCRIPTIONS: dict[str, str] = {
+    "5min": "Cada 5 minutos",
+    "minutes": "Por minutos",
+    "hourly": "Horaria",
+    "daily": "Diaria",
+    "monthly": "Mensual",
+    "yearly": "Anual",
+    "irregular": "Irregular",
+}
+
+
+def get_steps_per_year(frequency: str) -> int:
+    """Obtiene la cantidad de pasos temporales por año para una frecuencia dada.
+
+    Args:
+        frequency: Frecuencia temporal ("yearly", "monthly", "daily", etc.)
+
+    Returns:
+        Cantidad de pasos por año (1 para yearly, 12 para monthly, etc.)
+    """
+    return FREQUENCY_STEPS_PER_YEAR.get(frequency, 1)
+
+
+def get_scaled_sample_size(n: int, frequency: str) -> dict:
+    """Calcula métricas escaladas por frecuencia para interpretar tests.
+
+    Para una serie con n observaciones a una frecuencia dada, calcula:
+    - effective_years: cantidad equivalente de años de datos
+    - steps_per_year: pasos por año
+    - n_yearly_equivalent: n equivalente si fuera anual
+
+    Args:
+        n: Cantidad de observaciones.
+        frequency: Frecuencia temporal.
+
+    Returns:
+        Diccionario con métricas escaladas.
+    """
+    steps_per_year = get_steps_per_year(frequency)
+    effective_years = n / steps_per_year if steps_per_year > 0 else n
+    return {
+        "n": n,
+        "frequency": frequency,
+        "steps_per_year": steps_per_year,
+        "effective_years": round(effective_years, 2),
+        "n_yearly_equivalent": int(effective_years),
+    }
+
+
 @dataclass(frozen=True)
 class TestResult:
     """Resultado de una prueba estadística individual.

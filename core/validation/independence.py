@@ -4,6 +4,15 @@ Las pruebas de independencia verifican que las observaciones de una serie
 no estén correlacionadas serialmente. La independencia es un requisito
 fundamental para la validez de los análisis de frecuencia posteriores.
 
+Ahora con soporte para frecuencia temporal:
+    - Los valores críticos y lags se escalan según la frecuencia real de la serie.
+    - Anderson: El valor crítico usa n_yearly_equivalent (años equivalentes)
+      en lugar de n crudo, para que no se infle artificialmente con datos
+      de alta frecuencia.
+    - Ljung-Box: Los lags por defecto se calculan como min(12, n/4) para yearly,
+      se escalan a 12 para monthly y se ajustan para otras frecuencias.
+    - Durbin-Watson: Umbrales fijos aceptables, pero se reporta n_yearly.
+
 Pruebas implementadas:
     - Anderson (Test de autocorrelación serial): Principal, analiza
       correlaciones con desfasajes 1, 2 y 3.
@@ -29,10 +38,18 @@ from scipy import stats
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.stats.stattools import durbin_watson
 
-from core.shared.types import GroupVerdict, TestResult
+from core.shared.types import GroupVerdict, TestResult, get_scaled_sample_size
 
 
-def anderson_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+# Frecuencia temporal por defecto (año hidrológico convencional)
+DEFAULT_FREQUENCY = "yearly"
+
+
+def anderson_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test de Anderson para autocorrelación serial.
 
     Evalúa la independencia calculando coeficientes de autocorrelación
@@ -41,35 +58,36 @@ def anderson_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
 
     Fórmula:
         r_k = Σ[(x_t - x̄)(x_{t+k} - x̄)] / Σ(x_t - x̄)²
-        Valor crítico: ±1.96 / √n (banda de confianza 95%)
+        Valor crítico: ±1.96 / √n_yearly (usando años equivalentes)
 
-    Criterio del 10%:
-        En hidrología se considera que si menos del 10% de los coeficientes
-        exceden las bandas, la serie puede considerarse independiente.
-        Esta implementación usa max(|r_k|) como estadístico conservador.
+    La escala del valor crítico usa la cantidad de AÑOS equivalentes
+    (n / steps_per_year) en lugar de n crudo. Esto evita que series
+    de alta frecuencia (mensual, diaria) rechacen falsamente por tener
+    n demasiado grande.
 
     Args:
         series: Serie temporal de valores numéricos.
         alpha: Nivel de significancia. Default 0.05 (95% confianza).
+        temporal_frequency: Frecuencia temporal de la serie.
+            "yearly", "monthly", "daily", "hourly", "minutes", "5min".
+            Por defecto "yearly".
 
     Returns:
         TestResult con máximo coeficiente de autocorrelación absoluto,
         valor crítico, veredicto y detalles incluyendo r_1, r_2, r_3.
-
-    Note:
-        Esta prueba es la PRINCIPAL en la jerarquía de independencia.
-        Su veredicto determina el resultado del grupo completo.
-
-    Example:
-        >>> # Serie con autocorrelación positiva
-        >>> serie = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> result = anderson_test(serie)
-        >>> result.detail["acf_lag1"] > 0.9
-        True
     """
     n = len(series)
     x = series.to_numpy()
     mean = np.mean(x)
+
+    # Obtener métricas escaladas por frecuencia
+    scaled = get_scaled_sample_size(n, temporal_frequency)
+    effective_years = scaled["effective_years"]
+
+    # Valor crítico escalado por años efectivos (no por n crudo)
+    # Esto evita que datos de alta frecuencia inflen falsamente la potencia
+    n_effective = max(effective_years, 3)  # mínimo 3 años equivalentes
+    critical_value = 1.96 / np.sqrt(n_effective)
 
     # Calcular autocorrelaciones lag 1, 2, 3
     acf = []
@@ -78,9 +96,6 @@ def anderson_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         den = np.sum((x - mean) ** 2)
         rk = num / den if den != 0 else 0
         acf.append(rk)
-
-    # Valor crítico al 95%: ± 1.96 / sqrt(n)
-    critical_value = 1.96 / np.sqrt(n)
 
     # Criterio del 10%: si el 10% de los coeficientes exceden bandas -> rechazar
     max_acf = np.max(np.abs(acf))
@@ -97,11 +112,17 @@ def anderson_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             "acf_lag2": float(acf[1]),
             "acf_lag3": float(acf[2]),
             "n": n,
+            "n_effective_years": n_effective,
+            "temporal_frequency": temporal_frequency,
         },
     )
 
 
-def wald_wolfowitz_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+def wald_wolfowitz_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test de corridas de Wald-Wolfowitz para independencia.
 
     Analiza el número de "corridas" (runs) - secuencias consecutivas
@@ -118,27 +139,19 @@ def wald_wolfowitz_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         n1 = cantidad de valores > mediana
         n2 = cantidad de valores ≤ mediana
 
-    Interpretación:
-        - |Z| > Z_alpha/2: Se rechaza independencia (corridas atípicas)
-        - |Z| <= Z_alpha/2: Se acepta independencia
+    La frecuencia temporal se incluye en los detalles para trazabilidad,
+    pero el test de Wald-Wolfowitz es no paramétrico y no depende de n
+    en su estadístico (sí en el valor crítico).
 
     Args:
         series: Serie temporal de valores numéricos.
         alpha: Nivel de significancia. Default 0.05 (95% confianza).
+        temporal_frequency: Frecuencia temporal de la serie.
+            Se incluye en detalles informativos.
 
     Returns:
         TestResult con estadístico Z, valor crítico, veredicto y detalles
         incluyendo corridas observadas, esperadas y conteos n1/n2.
-
-    Note:
-        Esta prueba es VERIFICACIÓN en la jerarquía. Nunca anula a Anderson.
-
-    Example:
-        >>> # Serie alternante (muchas corridas)
-        >>> serie = pd.Series([1, 100, 2, 99, 3, 98])
-        >>> result = wald_wolfowitz_test(serie)
-        >>> result.detail["observed_runs"]  # Muchas corridas cortas
-        6
     """
     n = len(series)
     median = np.median(series)
@@ -161,7 +174,10 @@ def wald_wolfowitz_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             critical_value=1.96,
             alpha=alpha,
             verdict="ACCEPTED",
-            detail={"note": "All values are equal, independence assumed"},
+            detail={
+                "note": "All values are equal, independence assumed",
+                "temporal_frequency": temporal_frequency,
+            },
         )
 
     # Media y varianza esperada del número de corridas
@@ -186,11 +202,16 @@ def wald_wolfowitz_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             "expected_runs": float(mu),
             "n1": int(n1),
             "n2": int(n2),
+            "temporal_frequency": temporal_frequency,
         },
     )
 
 
-def durbin_watson_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+def durbin_watson_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test de Durbin-Watson para autocorrelación en residuos.
 
     Detecta autocorrelación de primer orden en los residuos de una
@@ -202,29 +223,17 @@ def durbin_watson_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
     Fórmula:
         DW = Σ(e_t - e_{t-1})² / Σe_t²
 
-    Valores críticos (aproximados para alpha=0.05):
-        - DW < 1.5: Autocorrelación positiva significativa
-        - DW > 2.5: Autocorrelación negativa significativa
-        - 1.5 ≤ DW ≤ 2.5: Aceptable (sin autocorrelación)
+    La frecuencia temporal se reporta en detalles para ayudar a
+    interpretar los umbrales en contexto.
 
     Args:
         series: Serie temporal de valores numéricos.
         alpha: Nivel de significancia. Default 0.05.
+        temporal_frequency: Frecuencia temporal de la serie.
 
     Returns:
         TestResult con estadístico DW, rango crítico, veredicto y
         detalles sobre el tipo de autocorrelación detectada.
-
-    Note:
-        Este test es complementario a Anderson. Mientras Anderson analiza
-        autocorrelación directa, DW analiza autocorrelación en diferencias
-        de valores consecutivos.
-
-    Example:
-        >>> serie = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> result = durbin_watson_test(serie)
-        >>> result.verdict
-        'REJECTED'  # Autocorrelación positiva fuerte
     """
     x = series.to_numpy()
 
@@ -252,6 +261,9 @@ def durbin_watson_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         verdict = "ACCEPTED"
         autocorr_type = "none"
 
+    # Obtener n de la serie
+    scaled = get_scaled_sample_size(len(x), temporal_frequency)
+
     return TestResult(
         name="Durbin-Watson Test",
         statistic=float(dw_stat),
@@ -267,12 +279,17 @@ def durbin_watson_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
                 if autocorr_type == "negative"
                 else "No significant autocorrelation"
             ),
+            "temporal_frequency": temporal_frequency,
+            "effective_years": scaled["effective_years"],
         },
     )
 
 
 def ljung_box_test(
-    series: pd.Series, lags: int = 12, alpha: float = 0.05
+    series: pd.Series,
+    lags: int | None = None,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
 ) -> TestResult:
     """Test de Ljung-Box para autocorrelación en múltiples lags.
 
@@ -284,34 +301,45 @@ def ljung_box_test(
         Q = n(n+2) Σ(r_k² / (n-k))
         para k = 1 hasta lags
 
-    donde:
-        n = tamaño de muestra
-        r_k = autocorrelación en lag k
-
-    Interpretación:
-        - Q > χ²_{alpha, lags}: Se rechaza independencia
-        - Q ≤ χ²_{alpha, lags}: Se acepta independencia
+    Los lags por defecto se calculan según la frecuencia temporal:
+        - yearly: min(12, n/4) (hasta 12 años de rezago)
+        - monthly: 12 (captura estacionalidad anual)
+        - daily: 30 (captura estacionalidad mensual)
+        - hourly: 168 (captura estacionalidad semanal)
 
     Args:
         series: Serie temporal de valores numéricos.
-        lags: Número máximo de lags a evaluar. Default 12.
+        lags: Número máximo de lags a evaluar. Si es None, se calcula
+            automáticamente según la frecuencia temporal.
         alpha: Nivel de significancia. Default 0.05.
+        temporal_frequency: Frecuencia temporal de la serie.
 
     Returns:
         TestResult con estadístico Q, valor crítico χ², veredicto y
         valor p.
 
     Note:
-        Este test es particularmente útil para series con periodicidad
-        estacional (ej: datos mensuales, lags=12).
-
-    Example:
-        >>> serie = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> result = ljung_box_test(serie, lags=5)
-        >>> result.verdict
-        'REJECTED'  # Autocorrelación detectada
+        Los lags automáticos están diseñados para capturar la estacionalidad
+        más larga relevante para cada frecuencia.
     """
     x = series.to_numpy()
+    n = len(x)
+
+    # Calcular lags por defecto según frecuencia
+    if lags is None:
+        freq_lags = {
+            "yearly": min(12, max(3, n // 4)),
+            "monthly": 12,  # Estacionalidad anual
+            "daily": 30,  # Estacionalidad mensual
+            "hourly": 168,  # Estacionalidad semanal (7*24)
+            "minutes": 60,  # Estacionalidad horaria
+            "5min": 288,  # Estacionalidad diaria (24*12)
+            "irregular": min(12, max(3, n // 4)),
+        }
+        lags = freq_lags.get(temporal_frequency, min(12, max(3, n // 4)))
+
+    # Asegurar que lags no exceda n // 2 - 1 (requisito técnico)
+    lags = min(lags, max(1, n // 2 - 1))
 
     try:
         lb_result = acorr_ljungbox(x, lags=[lags], return_df=True)
@@ -319,7 +347,6 @@ def ljung_box_test(
         lb_p = float(lb_result["lb_pvalue"].iloc[0])
     except Exception:  # noqa: BLE001
         # Fallback manual si statsmodels falla
-        n = len(x)
         mean = np.mean(x)
         acf = []
         for k in range(1, lags + 1):
@@ -342,6 +369,9 @@ def ljung_box_test(
     critical_value = stats.chi2.ppf(1 - alpha, df=lags)
     verdict = "REJECTED" if lb_p < alpha else "ACCEPTED"
 
+    # Obtener métricas escaladas
+    scaled = get_scaled_sample_size(n, temporal_frequency)
+
     return TestResult(
         name="Ljung-Box Test",
         statistic=float(lb_stat),
@@ -351,11 +381,17 @@ def ljung_box_test(
         detail={
             "lags_tested": lags,
             "p_value": float(lb_p),
+            "temporal_frequency": temporal_frequency,
+            "effective_years": scaled["effective_years"],
         },
     )
 
 
-def spearman_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+def spearman_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test de correlación de Spearman para independencia.
 
     Evalúa la correlación de rangos entre valores consecutivos de la serie.
@@ -369,26 +405,15 @@ def spearman_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         d_i = diferencia de rangos entre x_i y x_{i+1}
         n = tamaño de muestra - 1 (pares consecutivos)
 
-    Interpretación:
-        - |rho| > rho_crítico: Se rechaza independencia
-        - |rho| ≤ rho_crítico: Se acepta independencia
+    La frecuencia temporal se incluye en detalles para trazabilidad.
 
     Args:
         series: Serie temporal de valores numéricos.
         alpha: Nivel de significancia. Default 0.05.
+        temporal_frequency: Frecuencia temporal de la serie.
 
     Returns:
         TestResult con estadístico rho, valor crítico, veredicto y valor p.
-
-    Note:
-        A diferencia de Anderson que usa valores brutos, Spearman usa rangos.
-        Esto lo hace más robusto ante outliers.
-
-    Example:
-        >>> serie = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        >>> result = spearman_test(serie)
-        >>> result.verdict
-        'REJECTED'  # Correlación fuerte entre consecutivos
     """
     x = series.to_numpy()
 
@@ -404,8 +429,8 @@ def spearman_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         p_value = 1.0
 
     # Valor crítico aproximado para Spearman (n grande)
-    n = len(x_lag0)
-    critical_value = stats.norm.ppf(1 - alpha / 2) / np.sqrt(n - 1)
+    n_pairs = len(x_lag0)
+    critical_value = stats.norm.ppf(1 - alpha / 2) / np.sqrt(n_pairs - 1)
     verdict = "REJECTED" if abs(rho) > abs(critical_value) else "ACCEPTED"
 
     return TestResult(
@@ -420,6 +445,7 @@ def spearman_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             "correlation_direction": (
                 "positive" if rho > 0 else "negative" if rho < 0 else "none"
             ),
+            "temporal_frequency": temporal_frequency,
         },
     )
 

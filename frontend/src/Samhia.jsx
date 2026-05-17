@@ -308,9 +308,6 @@ export default function Samhia({ series, seriesId }) {
    * Obtiene los gráficos de análisis de outliers.
    */
   const fetchOutlierPlots = async () => {
-    // DEBUG: Verificar que la función se ejecuta
-    console.log("[DEBUG] fetchOutlierPlots INICIADO");
-    alert("[DEBUG] Cargando gráficos de outliers...");
     setOutlierPlotsLoading(true);
     setOutlierPlotsError("");
     
@@ -333,10 +330,6 @@ export default function Samhia({ series, seriesId }) {
       });
 
       const json = await response.json();
-      // DEBUG: Verificar la respuesta de la API
-      console.log("[DEBUG] API Response:", json);
-      console.log("[DEBUG] plot_urls keys:", json.plot_urls ? Object.keys(json.plot_urls) : "no plot_urls");
-      console.log("[DEBUG] fdp_plot present:", json.plot_urls ? !!json.plot_urls.fdp_plot : false);
       if (!response.ok) {
         setOutlierPlotsError(json.detail || "Error al cargar gráficos");
       } else {
@@ -626,16 +619,23 @@ export default function Samhia({ series, seriesId }) {
               {activeTab === "outliers" && (
                 <OutliersPanel 
                   tests={analysisResults.outliers}
-                  plots={outlierPlots}
-                  plotsLoading={outlierPlotsLoading}
-                  plotsError={outlierPlotsError}
-                  onLoadPlots={fetchOutlierPlots}
                 />
               )}
             </>
           )}
         </section>
       </div>
+
+      {analysisResults && (
+        <section className="panel visualizations-section">
+          <OutlierVisualizationsPanel
+            plots={outlierPlots}
+            plotsLoading={outlierPlotsLoading}
+            plotsError={outlierPlotsError}
+            onLoadPlots={fetchOutlierPlots}
+          />
+        </section>
+      )}
 
       {/* Panel de generación de PDF */}
       <section className="panel">
@@ -818,7 +818,6 @@ export function OutliersPanel({ tests }) {
       <p style={{ color: "#e2e8f0", marginBottom: "12px", fontSize: "0.9rem" }}>
         Identificación de valores atípicos usando métodos Chow y Kn.
         <br />
-        <em style={{ color: "#00aaff" }}>Los gráficos de análisis están disponibles en la sección "Visualizaciones y Gráficos".</em>
       </p>
 
       {/* Tabla de resultados */}
@@ -856,6 +855,81 @@ export function OutliersPanel({ tests }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Sección de gráficos generados para el análisis de atípicos.
+ */
+function OutlierVisualizationsPanel({ plots, plotsLoading, plotsError, onLoadPlots }) {
+  const plotItems = [
+    { key: "control_chart", title: "Serie temporal con umbrales Kn" },
+    { key: "probability_plot", title: "Probability plot" },
+    { key: "qq_plot", title: "Q-Q plot" },
+    { key: "fdp_plot", title: "Función de densidad de probabilidad" },
+  ];
+  const plotUrls = plots?.plot_urls || {};
+  const hasPlots = Object.keys(plotUrls).length > 0;
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", alignItems: "center", flexWrap: "wrap", marginBottom: "16px" }}>
+        <div>
+          <h2 style={{ marginBottom: "6px" }}>Visualizaciones del análisis SAMHIA</h2>
+          <p style={{ color: "#e2e8f0", margin: 0, fontSize: "0.9rem" }}>
+            Gráficos generados para la detección de valores atípicos.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-load-plots"
+          onClick={onLoadPlots}
+          disabled={plotsLoading}
+        >
+          {plotsLoading ? "Generando gráficos..." : hasPlots ? "Actualizar gráficos" : "Generar gráficos"}
+        </button>
+      </div>
+
+      {plotsError && <div className="error-banner" style={{ marginBottom: "12px" }}>{plotsError}</div>}
+
+      {plotsLoading && (
+        <div className="status-card">
+          Generando visualizaciones del análisis...
+        </div>
+      )}
+
+      {!plotsLoading && !hasPlots && !plotsError && (
+        <p style={{ color: "#e2e8f0", margin: 0 }}>
+          Usa el botón para generar los gráficos asociados al análisis.
+        </p>
+      )}
+
+      {hasPlots && (
+        <>
+          {plots.outliers_detected !== undefined && (
+            <div className="status-card" style={{ marginBottom: "16px" }}>
+              Atípicos detectados: <strong>{plots.outliers_detected}</strong>
+            </div>
+          )}
+          <div className="visualizations-grid">
+            {plotItems.map((plot) => (
+              plotUrls[plot.key] ? (
+                <div key={plot.key} className="water-chart-box">
+                  <div className="chart-title">{plot.title}</div>
+                  <div className="chart-content">
+                    <img
+                      src={plotUrls[plot.key]}
+                      alt={plot.title}
+                      style={{ width: "100%", height: "auto", display: "block", borderRadius: "8px" }}
+                    />
+                  </div>
+                </div>
+              ) : null
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

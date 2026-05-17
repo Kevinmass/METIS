@@ -67,6 +67,7 @@ class ReportConfig:
     report_type: str = DEFAULT_PDF_CONFIG.report_type
     author: str = DEFAULT_PDF_CONFIG.author
     alpha: float = 0.05
+    temporal_frequency: str = "yearly"
 
 
 def generate_samhia_report_pdf(  # noqa: C901, PLR0912, PLR0915
@@ -121,27 +122,32 @@ def generate_samhia_report_pdf(  # noqa: C901, PLR0912, PLR0915
         | (df[config.series_name] < limite_inferior)
     ].dropna(subset=[config.series_name])
 
-    # Ejecutar tests estadísticos
+    # Ejecutar tests estadísticos con frecuencia temporal
+    tf = config.temporal_frequency
     independence_results = {
-        "anderson": anderson_test(pd.Series(variable_calc), config.alpha),
-        "wald_wolfowitz": wald_wolfowitz_test(pd.Series(variable_calc), config.alpha),
-        "durbin_watson": durbin_watson_test(pd.Series(variable_calc), config.alpha),
-        "ljung_box": ljung_box_test(pd.Series(variable_calc), alpha=config.alpha),
-        "spearman": spearman_test(pd.Series(variable_calc), config.alpha),
+        "anderson": anderson_test(pd.Series(variable_calc), config.alpha, tf),
+        "wald_wolfowitz": wald_wolfowitz_test(
+            pd.Series(variable_calc), config.alpha, tf
+        ),
+        "durbin_watson": durbin_watson_test(pd.Series(variable_calc), config.alpha, tf),
+        "ljung_box": ljung_box_test(
+            pd.Series(variable_calc), alpha=config.alpha, temporal_frequency=tf
+        ),
+        "spearman": spearman_test(pd.Series(variable_calc), config.alpha, tf),
     }
 
     homogeneity_results = {
-        "helmert": helmert_test(pd.Series(variable_calc), config.alpha),
-        "t_student": t_student_test(pd.Series(variable_calc), config.alpha),
-        "cramer": cramer_test(pd.Series(variable_calc), config.alpha),
-        "mann_whitney": mann_whitney_test(pd.Series(variable_calc), config.alpha),
-        "mood": mood_test(pd.Series(variable_calc), config.alpha),
+        "helmert": helmert_test(pd.Series(variable_calc), config.alpha, tf),
+        "t_student": t_student_test(pd.Series(variable_calc), config.alpha, tf),
+        "cramer": cramer_test(pd.Series(variable_calc), config.alpha, tf),
+        "mann_whitney": mann_whitney_test(pd.Series(variable_calc), config.alpha, tf),
+        "mood": mood_test(pd.Series(variable_calc), config.alpha, tf),
     }
 
     trend_results = {
-        "mann_kendall": mann_kendall_test(pd.Series(variable_calc), config.alpha),
+        "mann_kendall": mann_kendall_test(pd.Series(variable_calc), config.alpha, tf),
         "kolmogorov_smirnov": kolmogorov_smirnov_trend_test(
-            pd.Series(variable_calc), config.alpha
+            pd.Series(variable_calc), config.alpha, tf
         ),
     }
 

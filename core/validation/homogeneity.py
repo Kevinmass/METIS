@@ -5,6 +5,13 @@ propiedades estadísticas consistentes a lo largo del tiempo. Esto es
 fundamental para garantizar que los datos provienen de una misma
 población y que los análisis de frecuencia son válidos.
 
+Ahora con soporte para frecuencia temporal:
+    - Todas las pruebas reciben temporal_frequency y la propagan en detalles.
+    - Los tests dividen la serie en dos mitades por índice, y reportan
+      la cantidad de años equivalentes en cada mitad.
+    - Esto ayuda a interpretar si n grande en alta frecuencia podría estar
+      inflando la significancia estadística.
+
 Pruebas implementadas:
     - Helmert: Compara varianzas de dos mitades de la serie.
     - t-Student: Compara medias de dos mitades de la serie.
@@ -23,10 +30,18 @@ import pandas as pd
 from scipy import stats
 from scipy.stats import mannwhitneyu, mood
 
-from core.shared.types import GroupVerdict, TestResult
+from core.shared.types import GroupVerdict, TestResult, get_scaled_sample_size
 
 
-def helmert_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+# Frecuencia temporal por defecto
+DEFAULT_FREQUENCY = "yearly"
+
+
+def helmert_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test de Helmert para homogeneidad de varianza.
 
     Compara las varianzas de la primera y segunda mitad de la serie
@@ -37,23 +52,17 @@ def helmert_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         F = max(var1, var2) / min(var1, var2)
         Valor crítico: F(alpha/2, df1, df2) de distribución F de Fisher
 
-    Interpretación:
-        - Si F > F_crítico: Se rechaza homogeneidad de varianza
-        - Si F ≤ F_crítico: Se acepta homogeneidad de varianza
+    Ahora reporta además los años equivalentes en los detalles, para
+    que el usuario pueda interpretar si los grados de libertad son
+    apropiados para la frecuencia de los datos.
 
     Args:
         series: Serie de valores numéricos a evaluar.
         alpha: Nivel de significancia. Default 0.05 (95% confianza).
+        temporal_frequency: Frecuencia temporal de la serie.
 
     Returns:
-        TestResult con estadístico F, valor crítico, veredicto y
-        detalles incluyendo varianzas de ambas mitades y grados de libertad.
-
-    Example:
-        >>> serie = pd.Series([10, 12, 11, 13, 100, 105, 102, 108])
-        >>> result = helmert_test(serie)
-        >>> result.verdict
-        'REJECTED'  # Varianzas muy diferentes entre mitades
+        TestResult con estadístico F, valor crítico, veredicto y detalles.
     """
     n = len(series)
     mid = n // 2
@@ -73,6 +82,9 @@ def helmert_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
     critical_value = stats.f.ppf(1 - alpha / 2, df1, df2)
     verdict = "REJECTED" if f_stat > critical_value else "ACCEPTED"
 
+    # Métricas escaladas
+    scaled_full = get_scaled_sample_size(n, temporal_frequency)
+
     return TestResult(
         name="Helmert Variance Homogeneity Test",
         statistic=float(f_stat),
@@ -84,11 +96,17 @@ def helmert_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             "variance_second_half": float(var2),
             "df1": int(df1),
             "df2": int(df2),
+            "temporal_frequency": temporal_frequency,
+            "effective_years": scaled_full["effective_years"],
         },
     )
 
 
-def t_student_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+def t_student_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test t de Student para homogeneidad de media.
 
     Compara las medias de la primera y segunda mitad de la serie.
@@ -100,23 +118,15 @@ def t_student_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         donde SE es el error estándar de la diferencia de medias
         Valor crítico: t(alpha/2, df) de distribución t de Student
 
-    Interpretación:
-        - Si |t| > t_crítico: Se rechaza igualdad de medias
-        - Si |t| ≤ t_crítico: Se acepta igualdad de medias
+    Ahora reporta los años equivalentes en detalles para contexto.
 
     Args:
         series: Serie de valores numéricos a evaluar.
         alpha: Nivel de significancia. Default 0.05 (95% confianza).
+        temporal_frequency: Frecuencia temporal de la serie.
 
     Returns:
-        TestResult con estadístico t, valor crítico, veredicto y
-        detalles incluyendo medias de ambas mitades y valor p.
-
-    Example:
-        >>> serie = pd.Series([10, 11, 12, 50, 51, 52])  # Salto en media
-        >>> result = t_student_test(serie)
-        >>> result.verdict
-        'REJECTED'  # Medias significativamente diferentes
+        TestResult con estadístico t, valor crítico, veredicto y detalles.
     """
     n = len(series)
     mid = n // 2
@@ -131,6 +141,9 @@ def t_student_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
     critical_value = stats.t.ppf(1 - alpha / 2, df=len(series) - 2)
     verdict = "REJECTED" if abs(t_stat) > critical_value else "ACCEPTED"
 
+    # Métricas escaladas
+    scaled_full = get_scaled_sample_size(n, temporal_frequency)
+
     return TestResult(
         name="Student t Mean Homogeneity Test",
         statistic=float(abs(t_stat)),
@@ -141,11 +154,17 @@ def t_student_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             "mean_first_half": float(np.mean(group1)),
             "mean_second_half": float(np.mean(group2)),
             "p_value": float(p_value),
+            "temporal_frequency": temporal_frequency,
+            "effective_years": scaled_full["effective_years"],
         },
     )
 
 
-def cramer_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+def cramer_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test de Cramer-von Mises para homogeneidad de distribución.
 
     Compara las funciones de distribución acumulada (CDF) de las dos
@@ -157,27 +176,13 @@ def cramer_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         W² = n * ∫[F1(x) - F2(x)]² dF(x)
         Valor crítico aproximado: 0.461 para alpha = 0.05
 
-    Interpretación:
-        - Si W² > 0.461: Se rechaza igualdad de distribuciones
-        - Si W² ≤ 0.461: Se acepta igualdad de distribuciones
-
     Args:
         series: Serie de valores numéricos a evaluar.
         alpha: Nivel de significancia. Default 0.05 (95% confianza).
+        temporal_frequency: Frecuencia temporal de la serie.
 
     Returns:
-        TestResult con estadístico W², valor crítico, veredicto y
-        valor p asociado.
-
-    Note:
-        Implementación basada en scipy.stats.cramervonmises_2samp,
-        que calcula el estadístico de forma exacta.
-
-    Example:
-        >>> serie = pd.Series([1, 2, 3, 100, 101, 102])  # Distribuciones diferentes
-        >>> result = cramer_test(serie)
-        >>> result.verdict
-        'REJECTED'  # Distribuciones significativamente diferentes
+        TestResult con estadístico W², valor crítico, veredicto y valor p.
     """
     n = len(series)
     mid = n // 2
@@ -193,17 +198,28 @@ def cramer_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
     critical_value = 0.461
     verdict = "REJECTED" if statistic > critical_value else "ACCEPTED"
 
+    # Métricas escaladas
+    scaled_full = get_scaled_sample_size(n, temporal_frequency)
+
     return TestResult(
         name="Cramer-von Mises Distribution Homogeneity Test",
         statistic=float(statistic),
         critical_value=float(critical_value),
         alpha=alpha,
         verdict=verdict,
-        detail={"p_value": float(p_value)},
+        detail={
+            "p_value": float(p_value),
+            "temporal_frequency": temporal_frequency,
+            "effective_years": scaled_full["effective_years"],
+        },
     )
 
 
-def mann_whitney_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+def mann_whitney_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test de Mann-Whitney U para homogeneidad de distribución.
 
     Prueba no paramétrica que compara las distribuciones de dos mitades
@@ -217,27 +233,13 @@ def mann_whitney_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             U2 = n1*n2 + n2(n2+1)/2 - R2
         R1, R2 = suma de rangos de cada grupo
 
-    Interpretación:
-        - p < alpha: Se rechaza igualdad de distribuciones
-        - p >= alpha: Se acepta igualdad de distribuciones
-
     Args:
         series: Serie de valores numéricos a evaluar.
         alpha: Nivel de significancia. Default 0.05.
+        temporal_frequency: Frecuencia temporal de la serie.
 
     Returns:
-        TestResult con estadístico U, valor p, veredicto y detalles
-        incluyendo medias de ambas mitades.
-
-    Note:
-        Este test es particularmente útil cuando hay valores atípicos
-        que podrían afectar tests paramétricos como t-Student.
-
-    Example:
-        >>> serie = pd.Series([10, 11, 12, 50, 51, 52])  # Salto en distribución
-        >>> result = mann_whitney_test(serie)
-        >>> result.verdict
-        'REJECTED'  # Distribuciones significativamente diferentes
+        TestResult con estadístico U, valor p, veredicto y detalles.
     """
     n = len(series)
     mid = n // 2
@@ -253,8 +255,10 @@ def mann_whitney_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         p_value = 1.0
 
     # Valor crítico aproximado usando distribución normal para n grande
-    # Para n pequeño, scipy ya calcula el valor p exacto
     verdict = "REJECTED" if p_value < alpha else "ACCEPTED"
+
+    # Métricas escaladas
+    scaled_full = get_scaled_sample_size(n, temporal_frequency)
 
     return TestResult(
         name="Mann-Whitney U Homogeneity Test",
@@ -268,11 +272,17 @@ def mann_whitney_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             "mean_second_half": float(np.mean(group2)),
             "n1": len(group1),
             "n2": len(group2),
+            "temporal_frequency": temporal_frequency,
+            "effective_years": scaled_full["effective_years"],
         },
     )
 
 
-def mood_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
+def mood_test(
+    series: pd.Series,
+    alpha: float = 0.05,
+    temporal_frequency: str = DEFAULT_FREQUENCY,
+) -> TestResult:
     """Test de Mood para homogeneidad de escala (varianza).
 
     Prueba no paramétrica que compara las varianzas de dos mitades de
@@ -283,26 +293,13 @@ def mood_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         M = Σ(m_i - (n+1)/2)²
         donde m_i = rangos de la primera mitad
 
-    Interpretación:
-        - Z > Z_alpha/2: Se rechaza homogeneidad de varianza
-        - |Z| <= Z_alpha/2: Se acepta homogeneidad de varianza
-
     Args:
         series: Serie de valores numéricos a evaluar.
         alpha: Nivel de significancia. Default 0.05.
+        temporal_frequency: Frecuencia temporal de la serie.
 
     Returns:
         TestResult con estadístico Z, valor crítico, veredicto y valor p.
-
-    Note:
-        Mood es más robusto que Helmert ante valores atípicos porque
-        opera sobre rangos, no sobre valores brutos.
-
-    Example:
-        >>> serie = pd.Series([10, 11, 12, 100, 101, 102])  # Varianzas muy diferentes
-        >>> result = mood_test(serie)
-        >>> result.verdict
-        'REJECTED'  # Varianzas significativamente diferentes
     """
     n = len(series)
     mid = n // 2
@@ -316,7 +313,6 @@ def mood_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
         mood_p = float(mood_result.pvalue)
     except Exception:  # noqa: BLE001
         # Fallback manual si scipy falla
-        # Calcular varianza de rangos de primera mitad
         all_ranks = stats.rankdata(series.to_numpy())
         ranks1 = all_ranks[:mid]
         expected_mean = (n + 1) / 2
@@ -330,6 +326,9 @@ def mood_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
     critical_value = stats.norm.ppf(1 - alpha / 2)
     verdict = "REJECTED" if mood_p < alpha else "ACCEPTED"
 
+    # Métricas escaladas
+    scaled_full = get_scaled_sample_size(n, temporal_frequency)
+
     return TestResult(
         name="Mood Scale Homogeneity Test",
         statistic=float(abs(mood_stat)),
@@ -340,6 +339,8 @@ def mood_test(series: pd.Series, alpha: float = 0.05) -> TestResult:
             "p_value": float(mood_p),
             "variance_first_half": float(np.var(group1, ddof=1)),
             "variance_second_half": float(np.var(group2, ddof=1)),
+            "temporal_frequency": temporal_frequency,
+            "effective_years": scaled_full["effective_years"],
         },
     )
 
@@ -364,14 +365,6 @@ def run_homogeneity(series: pd.Series) -> GroupVerdict:
         GroupVerdict con condition="homogeneity", los cinco resultados
         individuales, resolved_verdict=None (intencionalmente) y
         hierarchy_applied=False (no aplica jerarquía en este grupo).
-
-    Example:
-        >>> serie = pd.Series([10, 11, 12, 50, 51, 52])
-        >>> group = run_homogeneity(serie)
-        >>> len(group.individual_results)
-        5
-        >>> group.resolved_verdict is None
-        True  # No hay veredicto agregado por diseño
     """
     helmert = helmert_test(series)
     t_student = t_student_test(series)

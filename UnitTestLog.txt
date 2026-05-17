@@ -211,9 +211,8 @@ tests/unit/test_temporal_aggregation.py::TestHydrologicalYearVariations::test_hy
 
 ================================================== warnings summary ===================================================
 tests/unit/test_batch.py::TestPrepareDataFrame::test_prepare_dataframe_sorted
-  C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS viejo\core\batch\io_handlers.py:265: UserWarning: Parsing dates in %Y-%m-%d format when dayfirst=True was specified. Pass `dayfirst=False` or specify a format to silence this warning.
+  C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS viejo\core\batch\io_handlers.py:269: UserWarning: Parsing dates in %Y-%m-%d format when dayfirst=True was specified. Pass `dayfirst=False` or specify a format to silence this warning.
     df_prep["date"] = pd.to_datetime(df_prep["date"], dayfirst=True, errors="coerce")
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================================== 201 passed, 1 warning in 6.49s ============================================
-PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS viejo>
+=========================================== 201 passed, 1 warning in 6.64s ============================================

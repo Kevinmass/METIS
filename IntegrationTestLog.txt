@@ -6,4 +6,5 @@ PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS viejo> pytho
     import multipart
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-50 passed, 1 warning in 4.58s
+50 passed, 1 warning in 4.56s
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS viejo>

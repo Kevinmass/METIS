@@ -83,6 +83,10 @@ class SamhiaAnalysisResponse(BaseModel):
     trend: TrendResultsSchema
     outliers: OutlierResultsSchema
     warnings: list[str] = Field(default_factory=list)
+    temporal_frequency: str = Field(
+        default="yearly",
+        description="Frecuencia temporal usada en el análisis",
+    )
 
 
 class SamhiaAnalysisRequest(BaseModel):
@@ -93,6 +97,13 @@ class SamhiaAnalysisRequest(BaseModel):
     data: list[float] = Field(..., description="Serie temporal de valores")
     dates: list[str] = Field(..., description="Fechas correspondientes (ISO format)")
     alpha: float = Field(default=0.05, description="Nivel de significancia")
+    temporal_frequency: str = Field(
+        default="yearly",
+        description=(
+            "Frecuencia temporal de la serie. "
+            "Opciones: yearly, monthly, daily, hourly, minutes, 5min"
+        ),
+    )
 
 
 class BatchFileRequest(BaseModel):
@@ -135,6 +146,13 @@ class PDFGenerationRequest(BaseModel):
     institution: str = "METIS - Sistema de Análisis Hidrológico"
     report_type: str = "REPORTE DE ANÁLISIS ESTADÍSTICO"
     author: str = "Proyecto Integrador ISI UCC"
+    temporal_frequency: str = Field(
+        default="yearly",
+        description=(
+            "Frecuencia temporal de la serie. "
+            "Opciones: yearly, monthly, daily, hourly, minutes, 5min"
+        ),
+    )
 
 
 class PDFGenerationResponse(BaseModel):
@@ -156,6 +174,13 @@ class OutlierPlotRequest(BaseModel):
     distribution: str = Field(
         default="lognormal",
         description="Distribución teórica (lognormal, pearson3, gumbel)",
+    )
+    temporal_frequency: str = Field(
+        default="yearly",
+        description=(
+            "Frecuencia temporal de la serie. "
+            "Opciones: yearly, monthly, daily, hourly, minutes, 5min"
+        ),
     )
 
 

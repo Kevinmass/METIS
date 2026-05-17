@@ -15,11 +15,6 @@
  *      - POST /reports/analyze: Análisis estadístico completo
  *      - POST /reports/pdf: Generación de reportes PDF de 10 páginas
  *
- * Arquitectura unificada:
- *   - Datos fluyen de arriba hacia abajo (serie compartida entre módulos)
- *   - Cada módulo tiene su propio panel ejecutable independientemente
- *   - Resultados se muestran en secciones colapsables
- *
  * @module App
  */
 
@@ -326,21 +321,17 @@ function normalizeDate(dateStr) {
     const [, mesAbbr, anio] = mesAbbrMatch;
     const mesNum = mesesAbbr[mesAbbr.toLowerCase()];
     if (mesNum) {
-      // Determinar año completo
       let anioCompleto;
       if (anio.length === 4) {
         anioCompleto = anio;
       } else {
         const anioNum = parseInt(anio);
-        // Asumir 2000+ para años 00-49, 1900+ para 50-99
         anioCompleto = anioNum >= 50 ? `19${anio}` : `20${anio}`;
       }
       return `${anioCompleto}-${String(mesNum).padStart(2, "0")}-01`;
     }
   }
 
-  // Si no coincide con ningún formato conocido, devolver como está
-  // y dejar que el backend intente parsear
   return str;
 }
 
@@ -377,7 +368,6 @@ function extractCsvData(text, dateColumn, valueColumn, previewInfo) {
     if (dateVal && valueVal !== undefined && valueVal !== "") {
       const numValue = Number(valueVal);
       if (!Number.isNaN(numValue)) {
-        // Normalizar la fecha antes de guardar
         const normalizedDate = normalizeDate(dateVal);
         if (normalizedDate) {
           dates.push(normalizedDate);
@@ -421,8 +411,6 @@ function extractExcelData(buffer, dateColumn, valueColumn, previewInfo, sheetInd
     if (dateVal !== "" && valueVal !== "" && valueVal !== undefined) {
       const numValue = Number(valueVal);
       if (!Number.isNaN(numValue)) {
-        // Para Excel, si ya es un objeto Date, convertir a ISO
-        // Si es string, normalizar
         let normalizedDate;
         if (dateVal instanceof Date) {
           normalizedDate = dateVal.toISOString().split("T")[0];
@@ -447,9 +435,6 @@ function extractExcelData(buffer, dateColumn, valueColumn, previewInfo, sheetInd
 /**
  * Construye lista de advertencias para valores problemáticos.
  *
- * Detecta valores <= 0 (cero o negativos) que son físicamente
- * inválidos para caudales y generan advertencia previa.
- *
  * @param {number[]} series - Serie de valores
  * @returns {Array<{code, message, affected_indices}>} Lista de advertencias
  */
@@ -471,9 +456,6 @@ function buildWarnings(series) {
 
 /**
  * Calcula autocorrelación de la serie para el correlograma.
- *
- * Implementa el cálculo de autocorrelación con desfasajes (lags)
- * hasta MAX_LAG para visualización del correlograma.
  *
  * @param {number[]} series - Serie de valores (filtrada de no finitos)
  * @returns {Array<{lag, value}>} Array de coeficientes de autocorrelación
@@ -510,22 +492,41 @@ function serieToCsv(series) {
 }
 
 // =============================================================================
+// INFO DE SECCIONES PARA NAVEGACIÓN
+// =============================================================================
+
+const sectionInfo = {
+  ingesta: { title: 'Ingesta de datos', desc: 'Carga tu serie hidrológica desde un archivo CSV o ingresa los valores manualmente.' },
+  resumen: { title: 'Resumen de la serie', desc: 'Estadísticas descriptivas y gráficos exploratorios de la serie cargada.' },
+  samhia: { title: 'Análisis SAMHIA', desc: 'Análisis estadístico completo basado en SAMHIA_EST.R con tests detallados y generación de reportes PDF.' },
+  frecuencia: { title: 'Análisis de Frecuencia', desc: 'Ajusta distribuciones de probabilidad a tu serie y calcula eventos de diseño.' }
+};
+
+// =============================================================================
 // COMPONENTE PRINCIPAL APP
 // =============================================================================
 
 /**
  * Componente principal de la aplicación METIS.
  *
- * Gestiona el estado global de la serie, la comunicación con la API,
- * y el renderizado de las 4 secciones de la UI:
- *   1. Ingesta de datos (manual y archivos)
- *   2. Resumen de la serie (warnings, identificador)
- *   3. Visualizaciones (dispersión, correlograma)
- *   4. Resultados de validación (dashboard semáforo)
- *
  * @returns {JSX.Element} Aplicación React completa
  */
 export default function App() {
+  // ---------------------------------------------------------------------------
+  // NAVEGACIÓN
+  // ---------------------------------------------------------------------------
+
+  const [activeSection, setActiveSection] = useState("ingesta");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const navigate = (sectionId) => {
+    setActiveSection(sectionId);
+    setSidebarOpen(false);
+    if (sectionId === 'resumen') updateResumen();
+    if (sectionId === 'samhia') updateSamhiaState();
+    if (sectionId === 'frecuencia') updateFrecuenciaState();
+  };
+
   // ---------------------------------------------------------------------------
   // NOTIFICACIONES TOAST (Epic 4)
   // ---------------------------------------------------------------------------
@@ -540,10 +541,6 @@ export default function App() {
   const [seriesId, setSeriesId] = useState("serie_local");
   const [fileError, setFileError] = useState("");
   const [dragOver, setDragOver] = useState(false);
-
-  // ---------------------------------------------------------------------------
-  // ESTADO - MÓDULO DE VALIDACIÓN (SAMHIA integrado en sección 3)
-  // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
   // ESTADO - MÓDULO DE FRECUENCIA
@@ -600,20 +597,20 @@ export default function App() {
   const [temporalAggregationMethod, setTemporalAggregationMethod] = useState("sum");
   const [temporalHydrologicalYear, setTemporalHydrologicalYear] = useState(false);
   const [temporalHydrologicalStartMonth, setTemporalHydrologicalStartMonth] = useState(10);
-  const [temporalDailyStartHour, setTemporalDailyStartHour] = useState(0);  // Período diario personalizado
+  const [temporalDailyStartHour, setTemporalDailyStartHour] = useState(0);
   const [temporalProcessingLoading, setTemporalProcessingLoading] = useState(false);
   const [temporalProcessingError, setTemporalProcessingError] = useState("");
   const [temporalProcessingResult, setTemporalProcessingResult] = useState(null);
-  const [originalSeries, setOriginalSeries] = useState(null); // Guardar serie original antes de procesar
+  const [originalSeries, setOriginalSeries] = useState(null);
   const [availableTargetFrequencies, setAvailableTargetFrequencies] = useState([]);
 
   // ---------------------------------------------------------------------------
   // ESTADO - CONFIGURACIÓN DE FRECUENCIA TEMPORAL (parámetro 't')
   // ---------------------------------------------------------------------------
 
-  const [timeFrequency, setTimeFrequency] = useState("auto"); // 'auto', 'yearly', 'monthly', 'daily', 'hourly', 'custom'
-  const [customTimeInterval, setCustomTimeInterval] = useState(1); // Para frecuencia personalizada
-  const [customTimeUnit, setCustomTimeUnit] = useState("minutes"); // 'minutes', 'hours', 'days'
+  const [timeFrequency, setTimeFrequency] = useState("auto");
+  const [customTimeInterval, setCustomTimeInterval] = useState(1);
+  const [customTimeUnit, setCustomTimeUnit] = useState("minutes");
 
   // ---------------------------------------------------------------------------
   // MEMOIZACIÓN DE CÁLCULOS
@@ -664,8 +661,6 @@ export default function App() {
 
   /**
    * Ejecuta ajuste de distribuciones enviando serie a la API.
-   *
-   * POST /frequency/fit con body { series, estimation_method, distribution_names }
    */
   const handleFit = async () => {
     setFitError("");
@@ -693,7 +688,6 @@ export default function App() {
 
       const json = await response.json();
       if (!response.ok) {
-        // Error del middleware de errores matemáticos (Epic 4)
         const errorMsg = json.message || json.detail || "Error al ajustar distribuciones";
         const suggestion = json.suggestion || "";
         setFitError(errorMsg);
@@ -721,8 +715,6 @@ export default function App() {
 
   /**
    * Calcula evento de diseño para el período de retorno seleccionado.
-   *
-   * POST /frequency/design-event con body { distribution_name, parameters, return_period }
    */
   const handleDesignEvent = async () => {
     setDesignError("");
@@ -784,8 +776,6 @@ export default function App() {
 
   /**
    * Ejecuta análisis estadístico completo SAMHIA.
-   *
-   * POST /reports/analyze con datos de la serie
    */
   const handleAnalyzeSamhia = async () => {
     setAnalysisError("");
@@ -843,8 +833,6 @@ export default function App() {
 
   /**
    * Genera reporte PDF SAMHIA.
-   *
-   * POST /reports/pdf
    */
   const handleGeneratePdf = async () => {
     setPdfError("");
@@ -859,6 +847,7 @@ export default function App() {
     }
 
     setIsGeneratingPdf(true);
+    const loadingStartedAt = Date.now();
     showInfo("Generando reporte PDF...", { title: "Procesando", duration: 3000 });
 
     try {
@@ -898,6 +887,10 @@ export default function App() {
       setPdfError(msg);
       showError(msg, { title: "Error de conexión" });
     } finally {
+      const elapsed = Date.now() - loadingStartedAt;
+      if (elapsed < 350) {
+        await new Promise((resolve) => setTimeout(resolve, 350 - elapsed));
+      }
       setIsGeneratingPdf(false);
     }
   };
@@ -975,11 +968,6 @@ export default function App() {
 
   /**
    * Procesa archivo CSV o Excel cargado - Paso 1: Preview.
-   *
-   * Detecta formato por extensión, carga preview y muestra
-   * la interfaz de selección de columnas.
-   *
-   * @param {File} file - Archivo seleccionado vía input o drag-drop
    */
   const handleFile = async (file) => {
     setFileError("");
@@ -1009,14 +997,12 @@ export default function App() {
           return;
         }
 
-        // Guardar contenido raw y preview
         setRawFileContent({ type: "csv", content: text });
         setFilePreview(preview);
         showSuccess(`Archivo CSV cargado: ${preview.headers.length} columnas detectadas`, {
           title: "Vista previa lista",
         });
 
-        // Sugerir columnas por defecto
         const dateCol = preview.headers.find((h, i) => preview.columnTypes[i] === "date") || preview.headers[0];
         const valueCol = preview.headers.find((h, i) => preview.columnTypes[i] === "numeric") || preview.headers[1] || preview.headers[0];
         setSelectedDateColumn(dateCol);
@@ -1036,12 +1022,10 @@ export default function App() {
           return;
         }
 
-        // Guardar contenido raw y preview
         setRawFileContent({ type: "excel", content: buffer });
         setFilePreview(preview);
         setSelectedSheet(0);
 
-        // Sugerir columnas por defecto
         const dateCol = preview.headers.find((h, i) => preview.columnTypes[i] === "date") || preview.headers[0];
         const valueCol = preview.headers.find((h, i) => preview.columnTypes[i] === "numeric") || preview.headers[1] || preview.headers[0];
         setSelectedDateColumn(dateCol);
@@ -1072,7 +1056,6 @@ export default function App() {
 
   /**
    * Importa los datos con las columnas seleccionadas.
-   * Va al paso de procesamiento temporal antes de "done".
    */
   const handleImport = () => {
     if (!rawFileContent || !filePreview) return;
@@ -1091,17 +1074,14 @@ export default function App() {
         return;
       }
 
-      // Guardar datos originales
       setOriginalSeries({ values: result.values, dates: result.dates });
       setSeries(result.values);
       setDates(result.dates);
 
-      // Resetear estado de procesamiento temporal
       setTemporalProcessingEnabled(false);
       setTemporalProcessingResult(null);
       setTemporalProcessingError("");
 
-      // Ir al paso de procesamiento temporal
       setImportStep("process");
     } catch (error) {
       setFileError(`Error al importar datos: ${error.message}`);
@@ -1126,7 +1106,6 @@ export default function App() {
 
       if (response.ok) {
         const json = await response.json();
-        // Obtener targets disponibles
         const targetsResponse = await fetch(`${API_BASE}/temporal/available-targets`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1185,13 +1164,11 @@ export default function App() {
         setTemporalProcessingError(json.detail || "Error en procesamiento temporal");
       } else {
         setTemporalProcessingResult(json);
-        // Actualizar serie con datos procesados
         setSeries(json.values);
-        // Actualizar fechas según el tipo de índice resultante
         if (temporalTargetFrequency === "yearly") {
-          setDates(json.index.map(y => `${y}-06-15`)); // Fecha representativa del año
+          setDates(json.index.map(y => `${y}-06-15`));
         } else if (temporalTargetFrequency === "monthly") {
-          setDates(json.index.map(m => `${m}-15`)); // Fecha representativa del mes
+          setDates(json.index.map(m => `${m}-15`));
         } else {
           setDates(json.index);
         }
@@ -1228,6 +1205,26 @@ export default function App() {
   };
 
   // ---------------------------------------------------------------------------
+  // FUNCIONES DE ACTUALIZACIÓN DE SECCIONES
+  // ---------------------------------------------------------------------------
+
+  function getValidData() { return series.filter(v => !isNaN(v) && isFinite(v)); }
+
+  function updateResumen() {
+    // This is called on navigation; stats are computed inline in the render
+  }
+
+  function updateSamhiaState() {
+    const valid = getValidData().filter(v => v > 0);
+    // Stats computed inline
+  }
+
+  function updateFrecuenciaState() {
+    const valid = getValidData();
+    // Stats computed inline
+  }
+
+  // ---------------------------------------------------------------------------
   // RENDERIZADO
   // ---------------------------------------------------------------------------
 
@@ -1236,1089 +1233,914 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell">
-      <header className="page-header">
-        <div>
-          <h1>METIS — Sistema Integrado de Análisis Hidrológico</h1>
-          <p>
-            Plataforma unificada para validación estadística, análisis de frecuencia y reportes SAMHIA.
-            Carga tus datos una vez y ejecuta los análisis que necesites.
-          </p>
-        </div>
-      </header>
-
-      {/* ================================================================
-          SECCIÓN 1: INGESTA Y RESUMEN DE DATOS
-          ================================================================ */}
-      <div className="section-grid">
-        <section className="glass-panel">
-          <h2>1. Ingesta de datos</h2>
-
-          {/* PASO 1: DROPZONE (upload) */}
-          {(importStep === "upload" || importStep === "done") && (
-            <div
-              className={`file-dropzone ${dragOver ? "dragover" : ""}`}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragOver(false);
-                const file = event.dataTransfer.files[0];
-                handleFile(file);
-              }}
-            >
-              <strong>Arrastra un CSV o Excel aquí</strong>
-              <p>O selecciona un archivo para cargar la serie de valores.</p>
-              <input
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                style={{ opacity: 0, position: "absolute", inset: 0, cursor: "pointer" }}
-                onChange={(event) => handleFile(event.target.files?.[0])}
-              />
-            </div>
-          )}
-
-          {/* PASO 2: PREVIEW Y SELECCIÓN DE COLUMNAS */}
-          {importStep === "preview" && filePreview && (
-            <div className="glass-panel compact">
-              <h3>📄 Preview: {seriesId}</h3>
-
-              {/* Selector de hoja para Excel */}
-              {filePreview.sheetNames.length > 0 && (
-                <div style={{ marginBottom: "12px" }}>
-                  <label>Hoja: </label>
-                  <select
-                    value={selectedSheet}
-                    onChange={(e) => setSelectedSheet(Number(e.target.value))}
-                  >
-                    {filePreview.sheetNames.map((name, i) => (
-                      <option key={i} value={i}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Tabla de preview con iconos de tipo */}
-              <div className="table-wrapper" style={{ maxHeight: "200px", overflow: "auto" }}>
-                <table style={{ fontSize: "0.85em" }}>
-                  <thead>
-                    <tr>
-                      {filePreview.headers.map((header, i) => (
-                        <th key={i} style={{ textAlign: "center" }}>
-                          {header}
-                          <span style={{ marginLeft: "4px", fontSize: "0.9em" }}>
-                            {filePreview.columnTypes[i] === "date" && "📅"}
-                            {filePreview.columnTypes[i] === "numeric" && "🔢"}
-                            {filePreview.columnTypes[i] === "text" && "📝"}
-                          </span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filePreview.rows.map((row, rowIdx) => (
-                      <tr key={rowIdx}>
-                        {row.map((cell, cellIdx) => (
-                          <td key={cellIdx} style={{ padding: "4px 8px" }}>{cell}</td>
-                        ))}
-                      </tr>
-                    ))}
-                    <tr>
-                      <td
-                        colSpan={filePreview.headers.length}
-                        style={{ textAlign: "center", color: "#cbd5e1", fontStyle: "italic" }}
-                      >
-                        ... (más filas)
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Leyenda de tipos */}
-              <div style={{ fontSize: "0.8em", color: "#cbd5e1", marginTop: "8px" }}>
-                📅 Fecha | 🔢 Numérica | 📝 Texto
-              </div>
-
-              {/* Selectores de columnas */}
-              <div style={{ marginTop: "16px", display: "grid", gap: "12px" }}>
-                <div>
-                  <label style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
-                    Columna de fechas:
-                  </label>
-                  <select
-                    value={selectedDateColumn}
-                    onChange={(e) => setSelectedDateColumn(e.target.value)}
-                    style={{ width: "100%", padding: "6px" }}
-                  >
-                    {filePreview.headers.map((header, i) => (
-                      <option key={i} value={header}>
-                        {filePreview.columnTypes[i] === "date" && "📅 "}
-                        {filePreview.columnTypes[i] === "numeric" && "🔢 "}
-                        {filePreview.columnTypes[i] === "text" && "📝 "}
-                        {header}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: "block", marginBottom: "4px", fontWeight: 500 }}>
-                    Columna de valores:
-                  </label>
-                  <select
-                    value={selectedValueColumn}
-                    onChange={(e) => setSelectedValueColumn(e.target.value)}
-                    style={{ width: "100%", padding: "6px" }}
-                  >
-                    {filePreview.headers.map((header, i) => (
-                      <option key={i} value={header}>
-                        {filePreview.columnTypes[i] === "date" && "📅 "}
-                        {filePreview.columnTypes[i] === "numeric" && "🔢 "}
-                        {filePreview.columnTypes[i] === "text" && "📝 "}
-                        {header}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Preview de importación */}
-              {selectedDateColumn && selectedValueColumn && (
-                <div style={{ marginTop: "16px", padding: "12px", background: "#0f172a", borderRadius: "6px" }}>
-                  <strong style={{ fontSize: "0.9em" }}>Preview de importación:</strong>
-                  <div style={{ fontSize: "0.8em", color: "#cbd5e1", marginTop: "4px" }}>
-                    Fecha: <strong style={{ color: "#60a5fa" }}>{selectedDateColumn}</strong> | Valor: <strong style={{ color: "#60a5fa" }}>{selectedValueColumn}</strong>
-                  </div>
-                </div>
-              )}
-
-              {/* Botones de acción */}
-              <div className="button-group" style={{ marginTop: "16px" }}>
-                <button type="button" className="aqua-button secondary" onClick={handleCancelImport}>
-                  ← Volver
-                </button>
-                <button
-                  type="button"
-                  className="aqua-button"
-                  onClick={handleImport}
-                  disabled={!selectedDateColumn || !selectedValueColumn}
-                >
-                  Importar datos
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* PASO 3: PROCESAMIENTO TEMPORAL EXPANDIDO */}
-          {importStep === "process" && (
-            <div className="glass-panel compact">
-              <h3>⚙️ Procesamiento Temporal</h3>
-
-              {/* Info de datos cargados */}
-              <div className="temporal-controls" style={{ marginBottom: "16px" }}>
-                <strong>📊 Datos cargados</strong>
-                <div style={{ fontSize: "0.9em", color: "#e2e8f0", marginTop: "4px" }}>
-                  {dates.length} observaciones desde {dates[0]} hasta {dates[dates.length - 1]}
-                </div>
-                {availableTargetFrequencies.length > 0 && (
-                  <div style={{ fontSize: "0.8em", color: "#60a5fa", marginTop: "8px" }}>
-                    Frecuencias disponibles para agregación: {availableTargetFrequencies.join(", ")}
-                  </div>
-                )}
-              </div>
-
-              {/* CONFIGURACIÓN DE FRECUENCIA TEMPORAL (parámetro 't') */}
-              <div className="temporal-controls" style={{ marginBottom: "16px" }}>
-                <h4 style={{ marginBottom: "12px", color: "#7dd3fc" }}>⏱️ Configuración de Frecuencia Temporal</h4>
-                <p style={{ fontSize: "0.85em", color: "#e2e8f0", marginBottom: "12px" }}>
-                  Define el intervalo temporal de tu serie para los análisis estadísticos.
-                </p>
-
-                <div className="temporal-controls-row">
-                  <div className="temporal-control-group">
-                    <label>Frecuencia de la serie:</label>
-                    <select
-                      value={timeFrequency}
-                      onChange={(e) => setTimeFrequency(e.target.value)}
-                    >
-                      <option value="auto">🔍 Auto-detectar</option>
-                      <option value="yearly">📅 Anual (1 año)</option>
-                      <option value="monthly">📆 Mensual (1 mes)</option>
-                      <option value="daily">📋 Diaria (24 horas)</option>
-                      <option value="hourly">🕐 Horaria (1 hora)</option>
-                      <option value="custom">⚙️ Personalizada...</option>
-                    </select>
-                  </div>
-
-                  {timeFrequency === "custom" && (
-                    <>
-                      <div className="temporal-control-group" style={{ flex: "0 0 100px" }}>
-                        <label>Intervalo:</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={customTimeInterval}
-                          onChange={(e) => setCustomTimeInterval(Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="temporal-control-group" style={{ flex: "0 0 150px" }}>
-                        <label>Unidad:</label>
-                        <select
-                          value={customTimeUnit}
-                          onChange={(e) => setCustomTimeUnit(e.target.value)}
-                        >
-                          <option value="minutes">Minutos</option>
-                          <option value="hours">Horas</option>
-                          <option value="days">Días</option>
-                        </select>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Toggle para activar agregación */}
-              <div className="temporal-toggle" style={{ marginBottom: "16px" }}>
-                <input
-                  type="checkbox"
-                  checked={temporalProcessingEnabled}
-                  onChange={(e) => setTemporalProcessingEnabled(e.target.checked)}
-                />
-                <span>Agregar datos a mayor resolución temporal</span>
-              </div>
-              <p style={{ fontSize: "0.8em", color: "#cbd5e1", marginTop: "-10px", marginBottom: "16px", marginLeft: "54px" }}>
-                Permite agregar desde una frecuencia menor a una mayor (ej: minutos → horas → días).
-              </p>
-
-              {/* Opciones de agregación ascendente */}
-              {temporalProcessingEnabled && (
-                <div className="temporal-controls">
-                  <h4 style={{ marginBottom: "12px" }}>Opciones de Agregación Ascendente</h4>
-
-                  {/* Frecuencia objetivo */}
-                  <div className="temporal-controls-row">
-                    <div className="temporal-control-group">
-                      <label>Frecuencia objetivo:</label>
-                      <select
-                        value={temporalTargetFrequency}
-                        onChange={(e) => setTemporalTargetFrequency(e.target.value)}
-                      >
-                        {availableTargetFrequencies.includes("yearly") && (
-                          <option value="yearly">📅 Anual</option>
-                        )}
-                        {availableTargetFrequencies.includes("monthly") && (
-                          <option value="monthly">📆 Mensual</option>
-                        )}
-                        {availableTargetFrequencies.includes("daily") && (
-                          <option value="daily">📋 Diaria</option>
-                        )}
-                        {availableTargetFrequencies.includes("hourly") && (
-                          <option value="hourly">🕐 Horaria</option>
-                        )}
-                        {!availableTargetFrequencies.length && (
-                          <option value="yearly">📅 Anual (default)</option>
-                        )}
-                      </select>
-                    </div>
-
-                    <div className="temporal-control-group">
-                      <label>Método de agregación:</label>
-                      <select
-                        value={temporalAggregationMethod}
-                        onChange={(e) => setTemporalAggregationMethod(e.target.value)}
-                      >
-                        <option value="sum">∑ Suma (precipitación/volumen)</option>
-                        <option value="mean">Ø Promedio (temperatura/nivel)</option>
-                        <option value="max">↑ Máximo (caudal pico)</option>
-                        <option value="min">↓ Mínimo</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Año hidrológico - siempre visible, aplicable a series agregadas y no agregadas */}
-                  <div className="temporal-controls-row" style={{ marginTop: "12px" }}>
-                    <div className="temporal-control-group">
-                      <label className="temporal-toggle" style={{ padding: 0 }}>
-                        <input
-                          type="checkbox"
-                          checked={temporalHydrologicalYear}
-                          onChange={(e) => setTemporalHydrologicalYear(e.target.checked)}
-                        />
-                        <span>Usar año hidrológico</span>
-                      </label>
-                    </div>
-
-                    {temporalHydrologicalYear && (
-                      <div className="temporal-control-group">
-                        <label>Mes de inicio:</label>
-                        <select
-                          value={temporalHydrologicalStartMonth}
-                          onChange={(e) => setTemporalHydrologicalStartMonth(Number(e.target.value))}
-                        >
-                          <option value={1}>Enero</option>
-                          <option value={2}>Febrero</option>
-                          <option value={3}>Marzo</option>
-                          <option value={4}>Abril</option>
-                          <option value={5}>Mayo</option>
-                          <option value={6}>Junio</option>
-                          <option value={7}>Julio</option>
-                          <option value={8}>Agosto</option>
-                          <option value={9}>Septiembre</option>
-                          <option value={10}>Octubre (default)</option>
-                          <option value={11}>Noviembre</option>
-                          <option value={12}>Diciembre</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Período diario personalizado (solo para agregación diaria desde subdiaria) */}
-                  {(temporalTargetFrequency === "daily" || temporalTargetFrequency === "yearly") &&
-                   availableTargetFrequencies.some(f => ["hourly", "minutes", "5min"].includes(f)) && (
-                    <div className="temporal-controls-row" style={{ marginTop: "12px" }}>
-                      <div className="temporal-control-group">
-                        <label>Período diario personalizado:</label>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <input
-                            type="checkbox"
-                            checked={temporalDailyStartHour !== 0}
-                            onChange={(e) => setTemporalDailyStartHour(e.target.checked ? 9 : 0)}
-                            style={{ width: "auto" }}
-                          />
-                          <span style={{ fontSize: "0.85em", color: "#e2e8f0" }}>
-                            Usar período 24hs personalizado (ej: 09:00 a 09:00)
-                          </span>
-                        </div>
-                      </div>
-
-                      {temporalDailyStartHour !== 0 && (
-                        <div className="temporal-control-group" style={{ flex: "0 0 120px" }}>
-                          <label>Hora de inicio:</label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="23"
-                            value={temporalDailyStartHour}
-                            onChange={(e) => setTemporalDailyStartHour(Number(e.target.value))}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Botón procesar */}
-                  <button
-                    type="button"
-                    className="btn-load-plots"
-                    onClick={handleTemporalProcessing}
-                    disabled={temporalProcessingLoading}
-                    style={{ width: "100%", marginTop: "16px" }}
-                  >
-                    {temporalProcessingLoading ? "⏳ Procesando..." : temporalProcessingResult ? "🔄 Reprocesar" : "▶️ Procesar datos"}
-                  </button>
-                </div>
-              )}
-
-              {/* Error de procesamiento */}
-              {temporalProcessingError && (
-                <div className="status-banner error" style={{ marginBottom: "16px", marginTop: "16px" }}>
-                  {temporalProcessingError}
-                </div>
-              )}
-
-              {/* Resultado del procesamiento */}
-              {temporalProcessingResult && (
-                <div style={{ marginBottom: "16px", padding: "12px", background: "#064e3b", borderRadius: "6px", border: "1px solid #10b981" }}>
-                  <h4 style={{ marginBottom: "8px", color: "#34d399" }}>✓ Procesamiento completado</h4>
-                  <div style={{ fontSize: "0.85em" }}>
-                    <div><strong>Frecuencia original:</strong> {temporalProcessingResult.original_frequency}</div>
-                    <div><strong>Frecuencia objetivo:</strong> {temporalProcessingResult.target_frequency}</div>
-                    <div><strong>Resultado:</strong> {temporalProcessingResult.n_original} → {temporalProcessingResult.n_result} observaciones</div>
-                    <div><strong>Método:</strong> {temporalProcessingResult.aggregation_method}</div>
-                    {temporalProcessingResult.daily_start_hour > 0 && (
-                      <div><strong>Período diario:</strong> {temporalProcessingResult.daily_start_hour}:00 a {temporalProcessingResult.daily_start_hour}:00</div>
-                    )}
-                    {temporalProcessingResult.aggregation_bypass && (
-                      <div style={{ color: "#fbbf24" }}>⚠ Serie ya estaba en la frecuencia solicitada (sin cambios)</div>
-                    )}
-                  </div>
-
-                  {/* Botón restaurar */}
-                  <button
-                    type="button"
-                    className="aqua-button secondary"
-                    onClick={handleRestoreOriginal}
-                    style={{ marginTop: "12px", fontSize: "0.85em" }}
-                  >
-                    ↺ Restaurar serie original
-                  </button>
-                </div>
-              )}
-
-              {/* Botones de acción final */}
-              <div className="button-group" style={{ marginTop: "16px" }}>
-                <button
-                  type="button"
-                  className="aqua-button secondary"
-                  onClick={() => setImportStep("preview")}
-                >
-                  ← Volver
-                </button>
-                <button
-                  type="button"
-                  className="aqua-button"
-                  onClick={handleFinishImport}
-                >
-                  Continuar al análisis →
-                </button>
-              </div>
-            </div>
-          )}
-
-          {fileError ? <div className="status-banner error" style={{ marginTop: "12px" }}>{fileError}</div> : null}
-
-          {/* Tabla de datos (siempre visible cuando hay datos) */}
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  {dates.length > 0 && <th>Fecha</th>}
-                  <th>Valor</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {series.map((value, index) => {
-                  const invalid = !Number.isFinite(value);
-                  const warningValue = value <= 0;
-                  return (
-                    <tr key={`row-${index}`} className={warningValue ? "cell-error" : ""}>
-                      <td>{index + 1}</td>
-                      {dates.length > 0 && <td style={{ fontSize: "0.85em", color: "#94a3b8" }}>{dates[index] || "-"}</td>}
-                      <td>
-                        <input
-                          type="number"
-                          value={displayValue(value)}
-                          onChange={(event) => updateByIndex(index, Number(event.target.value))}
-                          className={invalid ? "cell-error" : ""}
-                        />
-                      </td>
-                      <td>
-                        <button type="button" className="aqua-button secondary" onClick={() => removeRow(index)}>
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="button-group">
-            <button type="button" className="aqua-button secondary" onClick={addRow}>
-              Agregar fila
-            </button>
-          </div>
-          <small>
-            Las celdas con valores cero o negativos se resaltan y se consideran advertencias en el análisis.
-          </small>
-        </section>
-
-        <section className="glass-panel">
-          <h2>2. Resumen de la serie</h2>
-          <p>
-            Identificador: <strong>{seriesId || "serie_local"}</strong>
-          </p>
-          <p>
-            N de datos: <strong>{series.length}</strong>
-          </p>
-          {warnings.length > 0 ? (
-            <div className="status-banner warning">
-              <strong>Advertencias detectadas</strong>
-              <ul>
-                {warnings.map((warning) => (
-                  <li key={warning.code}>
-                    {warning.message} [{warning.affected_indices.join(", ")}]
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="status-card">
-              <strong>Estado físico</strong>
-              <p>No se detectaron valores cero o negativos.</p>
-            </div>
-          )}
-
-          <div className="glass-panel compact" style={{ marginTop: "18px" }}>
-            <h3>Gráficos rápidos</h3>
-            <WaterChartBox title="Dispersión temporal">
-              {series.length >= 2 ? (
-                <ScatterPlot values={series} />
-              ) : (
-                <p>Agrega más datos para ver el gráfico.</p>
-              )}
-            </WaterChartBox>
-            <WaterChartBox title="Correlograma preliminar" style={{ marginTop: "18px" }}>
-              {series.length >= 4 ? (
-                <Correlogram data={autoCorrelation} band={band} />
-              ) : (
-                <p>Necesitas al menos 4 datos para ver autocorrelación.</p>
-              )}
-            </WaterChartBox>
-          </div>
-        </section>
+    <>
+      {/* Background Effects */}
+      <div className="bg-effects" aria-hidden="true">
+        <div className="blob blob-1"></div>
+        <div className="blob blob-2"></div>
+        <div className="blob blob-3"></div>
+        <div className="grid-overlay"></div>
       </div>
 
-      {/* ================================================================
-          SECCIÓN 3: ANÁLISIS SAMHIA Y GENERACIÓN DE REPORTES
-          ================================================================ */}
-      <section className="glass-panel">
-        <h2>3. Análisis SAMHIA y Reportes PDF</h2>
-        <p style={{ color: "#e2e8f0", marginBottom: "18px" }}>
-          Análisis estadístico completo basado en SAMHIA_EST.R con tests detallados y generación de reportes PDF de 10 páginas.
-        </p>
+      {/* Sidebar Overlay (mobile) */}
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
+        id="sidebarOverlay"
+        onClick={() => setSidebarOpen(false)}
+      ></div>
 
-        <div className="section-grid">
-          {/* Panel de configuración SAMHIA */}
-          <div>
-            <div style={{ marginBottom: "12px" }}>
-              <label>
-                <strong>Nombre del embalse:</strong>
-                <input
-                  type="text"
-                  value={reservoirName}
-                  onChange={(e) => setReservoirName(e.target.value)}
-                  style={{ marginTop: "6px", width: "100%" }}
-                  placeholder="Ej: UCC-DAT-ESR-AH-001"
-                />
-              </label>
+      <div className="app-shell">
+        {/* Sidebar */}
+        <aside className="sidebar" role="navigation" aria-label="Navegación principal">
+          <div className="sidebar-brand">
+            <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+              <div style={{width:'34px', height:'34px', borderRadius:'9px', background:'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center'}}>
+                <i className="fas fa-water" style={{color:'#fff', fontSize:'15px'}}></i>
+              </div>
+              <div>
+                <div className="font-display" style={{fontWeight:'700', fontSize:'17px', letterSpacing:'-0.02em', color:'var(--fg)'}}>METIS</div>
+                <div style={{fontSize:'10px', color:'var(--fg-muted)', letterSpacing:'0.04em', textTransform:'uppercase'}}>Análisis Hidrológico</div>
+              </div>
             </div>
-
-            <div style={{ marginBottom: "12px" }}>
-              <label>
-                <strong>Nombre de la variable:</strong>
-                <input
-                  type="text"
-                  value={seriesName}
-                  onChange={(e) => setSeriesName(e.target.value)}
-                  style={{ marginTop: "6px", width: "100%" }}
-                  placeholder="Ej: Caudal, Nivel, Precipitación"
-                />
-              </label>
-            </div>
-
-            <div style={{ marginBottom: "18px" }}>
-              <label>
-                <strong>Nivel de significancia (α):</strong>
-                <select
-                  value={alpha}
-                  onChange={(e) => setAlpha(Number(e.target.value))}
-                  style={{ marginTop: "6px", width: "100%" }}
-                >
-                  <option value={0.01}>0.01 (99% confianza)</option>
-                  <option value={0.05}>0.05 (95% confianza)</option>
-                  <option value={0.10}>0.10 (90% confianza)</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="button-group">
-              <button
-                type="button"
-                className="aqua-button"
-                onClick={handleAnalyzeSamhia}
-                disabled={isAnalyzing || series.length < 12}
-              >
-                {isAnalyzing ? "Analizando..." : "Ejecutar análisis SAMHIA"}
-              </button>
-            </div>
-
-            {analysisError && <div className="status-banner error" style={{ marginTop: "12px" }}>{analysisError}</div>}
-
-            <small style={{ marginTop: "12px", display: "block", color: "#cbd5e1" }}>
-              Se requieren al menos 12 datos válidos para el análisis SAMHIA completo.
-            </small>
           </div>
 
-          {/* Panel de generación de PDF */}
-          <div>
-            <p style={{ marginBottom: "12px" }}>
-              Genera un reporte PDF completo de 10 páginas con:
-            </p>
-            <ul style={{ marginLeft: "20px", marginBottom: "16px", color: "#e2e8f0", fontSize: "0.9rem" }}>
-              <li>Gráficos de serie temporal, años calendario e hidrológico</li>
-              <li>Análisis de datos atípicos y boxplots mensuales/anuales</li>
-              <li>Histograma, Q-Q plot y función de autocorrelación</li>
-              <li>Tablas resumen de estadísticas y año hidrológico</li>
-              <li>Resultados de tests de independencia, homogeneidad y tendencia</li>
-            </ul>
+          <nav className="sidebar-nav">
+            <button
+              className={`nav-item ${activeSection === 'ingesta' ? 'active' : ''}`}
+              onClick={() => navigate('ingesta')}
+            >
+              <i className="fas fa-cloud-arrow-up"></i><span>Ingesta de datos</span>
+            </button>
+            <button
+              className={`nav-item ${activeSection === 'resumen' ? 'active' : ''}`}
+              onClick={() => navigate('resumen')}
+            >
+              <i className="fas fa-chart-line"></i><span>Resumen de la serie</span>
+            </button>
+            <button
+              className={`nav-item ${activeSection === 'samhia' ? 'active' : ''}`}
+              onClick={() => navigate('samhia')}
+            >
+              <i className="fas fa-file-pdf"></i><span>Análisis SAMHIA</span>
+            </button>
+            <button
+              className={`nav-item ${activeSection === 'frecuencia' ? 'active' : ''}`}
+              onClick={() => navigate('frecuencia')}
+            >
+              <i className="fas fa-wave-square"></i><span>Análisis de Frecuencia</span>
+            </button>
+          </nav>
 
-            <div className="button-group">
-              <button
-                type="button"
-                className="aqua-button"
-                onClick={handleGeneratePdf}
-                disabled={isGeneratingPdf || series.length < 12}
-              >
-                {isGeneratingPdf ? "Generando PDF..." : "Generar reporte PDF"}
-              </button>
-
-              {pdfPath && (
-                <button
-                  type="button"
-                  className="aqua-button secondary"
-                  onClick={handleDownloadPdf}
-                >
-                  Descargar PDF
-                </button>
-              )}
+          <div className="sidebar-footer">
+            <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+              <div className="status-dot"></div>
+              <span style={{fontSize:'12px', color:'var(--fg-muted)'}}>Sistema activo</span>
             </div>
+            <div style={{fontSize:'10px', color:'var(--border)', marginTop:'6px'}}>v2.0 — SAMHIA_EST.R</div>
+          </div>
+        </aside>
 
-            {pdfError && <div className="status-banner error" style={{ marginTop: "12px" }}>{pdfError}</div>}
-
-            {pdfPath && (
-              <div className="status-card" style={{ marginTop: "12px" }}>
-                <span className="status-pill accepted">PDF generado exitosamente</span>
-                <p style={{ marginTop: "8px", fontSize: "0.9rem" }}>
-                  Ruta: {pdfPath}
+        {/* Main Content */}
+        <main className="main-content">
+          {/* Top Bar */}
+          <header className="top-bar">
+            <div style={{display:'flex', alignItems:'center', gap:'14px'}}>
+              <button
+                className="mobile-toggle"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                style={{background:'var(--bg-raised)', border:'1px solid var(--border)', color:'var(--fg-muted)', cursor:'pointer', padding:'7px 10px', borderRadius:'8px', fontSize:'16px'}}
+                aria-label="Abrir menú"
+              >
+                <i className="fas fa-bars"></i>
+              </button>
+              <div>
+                <h1 className="font-display" style={{fontSize:'18px', fontWeight:'700', letterSpacing:'-0.01em', margin:'0'}}>
+                  {sectionInfo[activeSection]?.title || 'METIS'}
+                </h1>
+                <p style={{fontSize:'12.5px', color:'var(--fg-muted)', margin:'2px 0 0'}}>
+                  {sectionInfo[activeSection]?.desc || ''}
                 </p>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Resultados del análisis SAMHIA */}
-        {analysisResults && (
-          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #1f2e47" }}>
-            <h3>Resultados del análisis SAMHIA</h3>
-
-            <div className="status-card" style={{ marginBottom: "18px" }}>
-              <strong>Análisis completado</strong>
-              <p>Variable: <strong>{analysisResults.series_name}</strong></p>
-              <p>Embalse: <strong>{analysisResults.reservoir_name}</strong></p>
-              <p>N de datos: <strong>{analysisResults.n_data}</strong></p>
             </div>
-
-            {/* Tabs de resultados SAMHIA */}
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
-              {["analysis", "independence", "homogeneity", "trend", "outliers"].map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  className={`tab-button ${activeSamhiaTab === tab ? "active" : ""}`}
-                  onClick={() => setActiveSamhiaTab(tab)}
-                  style={{ padding: "8px 16px", fontSize: "0.9rem" }}
-                >
-                  {tab === "analysis" && "Estadísticas"}
-                  {tab === "independence" && "Independencia"}
-                  {tab === "homogeneity" && "Homogeneidad"}
-                  {tab === "trend" && "Tendencia"}
-                  {tab === "outliers" && "Atípicos"}
-                </button>
-              ))}
-            </div>
-
-            {/* Contenido de tabs SAMHIA */}
-            {activeSamhiaTab === "analysis" && (
-              <DescriptiveStatsPanel stats={analysisResults.descriptive_stats} />
-            )}
-            {activeSamhiaTab === "independence" && (
-              <TestResultsPanel
-                title="Tests de Independencia"
-                tests={analysisResults.independence}
-                description="Evalúan si los datos son independientes (no autocorrelacionados)."
-              />
-            )}
-            {activeSamhiaTab === "homogeneity" && (
-              <TestResultsPanel
-                title="Tests de Homogeneidad"
-                tests={analysisResults.homogeneity}
-                description="Evalúan si la serie es homogénea a lo largo del tiempo."
-              />
-            )}
-            {activeSamhiaTab === "trend" && (
-              <TestResultsPanel
-                title="Tests de Tendencia"
-                tests={analysisResults.trend}
-                description="Evalúan si existe tendencia significativa en la serie."
-              />
-            )}
-            {activeSamhiaTab === "outliers" && (
-              <OutliersPanel
-                tests={analysisResults.outliers}
-              />
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* ================================================================
-          SECCIÓN 4: ANÁLISIS DE FRECUENCIA
-          ================================================================ */}
-      <section className="glass-panel">
-        <h2>4. Análisis de Frecuencia</h2>
-        <p style={{ color: "#e2e8f0", marginBottom: "18px" }}>
-          Ajusta distribuciones de probabilidad a tu serie y calcula eventos de diseño.
-        </p>
-
-        <div className="section-grid">
-          {/* Panel de configuración de frecuencia */}
-          <div>
-            <div style={{ marginBottom: "18px" }}>
-              <label htmlFor="estimation-method">
-                <strong>Método de estimación:</strong>
-              </label>
-              <select
-                id="estimation-method"
-                value={estimationMethod}
-                onChange={(e) => setEstimationMethod(e.target.value)}
-                style={{ marginTop: "8px", width: "100%" }}
+            <div style={{display:'flex', alignItems:'center', gap:'16px'}}>
+              <span
+                className={`data-badge ${series.length > 0 ? 'visible' : ''}`}
               >
-                {ESTIMATION_METHODS.map((method) => (
-                  <option key={method} value={method}>
-                    {method}
-                  </option>
-                ))}
-              </select>
+                <i className="fas fa-database" style={{marginRight:'5px'}}></i>
+                <span>{series.length}</span> -datos
+              </span>
             </div>
+          </header>
 
-            <div style={{ marginBottom: "18px" }}>
-              <strong>Distribuciones a ajustar:</strong>
-              <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {AVAILABLE_DISTRIBUTIONS.map((dist) => (
-                  <label
-                    key={dist}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "6px 10px",
-                      background: selectedDistributions.includes(dist) ? "#1e3a5f" : "#0f1a2f",
-                      border: selectedDistributions.includes(dist) ? "1px solid #3b82f6" : "1px solid #1f2e47",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      fontSize: "0.9rem",
+          <div className="content-area">
+            {/* ==================== SECCIÓN 1: INGESTA ==================== */}
+            <section className={`section ${activeSection === 'ingesta' ? 'active' : ''}`} id="sec-ingesta" aria-label="Ingesta de datos">
+              <div style={{marginBottom:'28px'}}>
+                <h2 className="font-display" style={{fontSize:'26px', fontWeight:'700', margin:'0 0 8px', letterSpacing:'-0.02em'}}>Ingesta de datos</h2>
+                <p style={{color:'var(--fg-muted)', fontSize:'14.5px', maxWidth:'600px', lineHeight:'1.6'}}>Carga tu serie hidrológica desde un archivo CSV o ingresa los valores manualmente. Los datos se almacenarán para todos los módulos de análisis.</p>
+              </div>
+
+              {/* Dropzone */}
+              {(importStep === "upload" || importStep === "done") && (
+                <div className="card" style={{marginBottom:'20px'}}>
+                  <div
+                    className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => document.getElementById('fileInput')?.click()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        document.getElementById('fileInput')?.click();
+                      }
                     }}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => { e.preventDefault(); setDragOver(false); const file = e.dataTransfer.files[0]; if (file) handleFile(file); }}
                   >
+                    <div className="drop-icon"><i className="fas fa-cloud-arrow-up"></i></div>
+                    <p style={{fontSize:'15px', fontWeight:'600', margin:'0 0 6px', position:'relative'}}>Arrastra un CSV o Excel aquí</p>
+                    <p style={{fontSize:'13px', color:'var(--fg-muted)', margin:'0 0 16px', position:'relative'}}>O selecciona un archivo para cargar la serie de valores</p>
                     <input
-                      type="checkbox"
-                      checked={selectedDistributions.includes(dist)}
-                      onChange={() => toggleDistribution(dist)}
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      style={{display:'none'}}
+                      id="fileInput"
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ''; }}
                     />
-                    <span>{dist}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+                    <button
+                      className="btn-secondary"
+                      onClick={(e) => { e.stopPropagation(); document.getElementById('fileInput')?.click(); }}
+                      type="button"
+                    >
+                      <i className="fas fa-folder-open" style={{marginRight:'6px'}}></i>Seleccionar archivo
+                    </button>
+                  </div>
+                  <div style={{display:'flex', alignItems:'center', gap:'12px', marginTop:'14px', paddingTop:'14px', borderTop:'1px solid var(--border)'}}>
+                    <span style={{fontSize:'11px', color:'var(--border)', marginLeft:'auto'}}>Formatos: CSV, XLSX, XLS</span>
+                  </div>
+                </div>
+              )}
 
-            <div className="button-group">
-              <button
-                type="button"
-                className="aqua-button"
-                onClick={handleFit}
-                disabled={isFitting || selectedDistributions.length === 0}
-              >
-                {isFitting ? "Ajustando..." : "Ajustar distribuciones"}
-              </button>
-            </div>
+              {/* Preview & Column Selection */}
+              {importStep === "preview" && filePreview && (
+                <div className="card" style={{marginBottom:'20px'}}>
+                  <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 12px'}}>📄 Preview: {seriesId}</h3>
 
-            {fitError && <div className="status-banner error" style={{ marginTop: "12px" }}>{fitError}</div>}
-          </div>
-
-          {/* Panel de resultados de ajuste */}
-          <div>
-            {fitResults ? (
-              <>
-                <div className="status-card" style={{ marginBottom: "18px" }}>
-                  <strong>Distribución recomendada</strong>
-                  {fitResults.recommended_distribution ? (
-                    <>
-                      <span className="status-pill accepted" style={{ marginTop: "8px", display: "inline-flex" }}>
-                        {fitResults.recommended_distribution.distribution_name}
-                      </span>
-                      <p style={{ marginTop: "8px", fontSize: "0.9rem", color: "#e2e8f0" }}>
-                        Método: {fitResults.estimation_method} | N: {fitResults.n}
-                      </p>
-                    </>
-                  ) : (
-                    <p>No se pudo determinar una distribución recomendada.</p>
+                  {filePreview.sheetNames.length > 0 && (
+                    <div style={{marginBottom:'12px'}}>
+                      <label className="form-label">Hoja:</label>
+                      <select className="form-input" value={selectedSheet} onChange={(e) => setSelectedSheet(Number(e.target.value))}>
+                        {filePreview.sheetNames.map((name, i) => (
+                          <option key={i} value={i}>{name}</option>
+                        ))}
+                      </select>
+                    </div>
                   )}
+
+                  <div className="table-wrapper" style={{maxHeight:'200px', overflow:'auto'}}>
+                    <table className="data-table" style={{fontSize:'0.85em'}}>
+                      <thead>
+                        <tr>
+                          {filePreview.headers.map((header, i) => (
+                            <th key={i} style={{textAlign:'center'}}>
+                              {header}
+                              <span style={{marginLeft:'4px', fontSize:'0.9em'}}>
+                                {filePreview.columnTypes[i] === 'date' && ' 📅'}
+                                {filePreview.columnTypes[i] === 'numeric' && ' 🔢'}
+                                {filePreview.columnTypes[i] === 'text' && ' 📝'}
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filePreview.rows.map((row, rowIdx) => (
+                          <tr key={rowIdx}>
+                            {row.map((cell, cellIdx) => (
+                              <td key={cellIdx} style={{padding:'4px 8px'}}>{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                        <tr>
+                          <td colSpan={filePreview.headers.length} style={{textAlign:'center', color:'var(--fg-muted)', fontStyle:'italic'}}>
+                            ... (más filas)
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={{fontSize:'0.8em', color:'var(--fg-muted)', marginTop:'8px'}}>📅 Fecha | 🔢 Numérica | 📝 Texto</div>
+
+                  <div style={{marginTop:'16px', display:'grid', gap:'12px'}}>
+                    <div>
+                      <label className="form-label">Columna de fechas:</label>
+                      <select className="form-input" value={selectedDateColumn} onChange={(e) => setSelectedDateColumn(e.target.value)}>
+                        {filePreview.headers.map((header, i) => (
+                          <option key={i} value={header}>
+                            {filePreview.columnTypes[i] === 'date' && '📅 '}
+                            {filePreview.columnTypes[i] === 'numeric' && '🔢 '}
+                            {filePreview.columnTypes[i] === 'text' && '📝 '}
+                            {header}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Columna de valores:</label>
+                      <select className="form-input" value={selectedValueColumn} onChange={(e) => setSelectedValueColumn(e.target.value)}>
+                        {filePreview.headers.map((header, i) => (
+                          <option key={i} value={header}>
+                            {filePreview.columnTypes[i] === 'date' && '📅 '}
+                            {filePreview.columnTypes[i] === 'numeric' && '🔢 '}
+                            {filePreview.columnTypes[i] === 'text' && '📝 '}
+                            {header}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {selectedDateColumn && selectedValueColumn && (
+                    <div style={{marginTop:'16px', padding:'12px', background:'var(--bg)', borderRadius:'8px'}}>
+                      <strong style={{fontSize:'0.9em'}}>Preview de importación:</strong>
+                      <div style={{fontSize:'0.8em', color:'var(--fg-muted)', marginTop:'4px'}}>
+                        Fecha: <strong style={{color:'var(--accent)'}}>{selectedDateColumn}</strong> | Valor: <strong style={{color:'var(--accent)'}}>{selectedValueColumn}</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="button-group" style={{marginTop:'16px'}}>
+                    <button className="btn-secondary" onClick={handleCancelImport}>← Volver</button>
+                    <button className="btn-primary" onClick={handleImport} disabled={!selectedDateColumn || !selectedValueColumn}>Importar datos</button>
+                  </div>
                 </div>
+              )}
 
-                <div className="accordion">
-                  {fitResults.distributions.map((dist) => (
-                    <DistributionResult
-                      key={dist.distribution_name}
-                      distribution={dist}
-                      isSelected={selectedDistribution?.distribution_name === dist.distribution_name}
-                      onSelect={() => setSelectedDistribution(dist)}
-                    />
-                  ))}
+              {/* Temporal Processing */}
+              {importStep === "process" && (
+                <div className="card" style={{marginBottom:'20px'}}>
+                  <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 12px'}}>⚙️ Procesamiento Temporal</h3>
+
+                  <div className="temporal-controls" style={{marginBottom:'16px'}}>
+                    <strong>📊 Datos cargados</strong>
+                    <div style={{fontSize:'0.9em', color:'var(--fg-muted)', marginTop:'4px'}}>
+                      {dates.length} observaciones desde {dates[0]} hasta {dates[dates.length - 1]}
+                    </div>
+                    {availableTargetFrequencies.length > 0 && (
+                      <div style={{fontSize:'0.8em', color:'var(--accent)', marginTop:'8px'}}>
+                        Frecuencias disponibles para agregación: {availableTargetFrequencies.join(", ")}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="temporal-controls" style={{marginBottom:'16px'}}>
+                    <h4 style={{marginBottom:'12px', color:'var(--fg)'}}>⏱️ Configuración de Frecuencia Temporal</h4>
+                    <p style={{fontSize:'0.85em', color:'var(--fg-muted)', marginBottom:'12px'}}>
+                      Define el intervalo temporal de tu serie para los análisis estadísticos.
+                    </p>
+
+                    <div className="temporal-controls-row">
+                      <div className="temporal-control-group">
+                        <label>Frecuencia de la serie:</label>
+                        <select value={timeFrequency} onChange={(e) => setTimeFrequency(e.target.value)}>
+                          <option value="auto">🔍 Auto-detectar</option>
+                          <option value="yearly">📅 Anual (1 año)</option>
+                          <option value="monthly">📆 Mensual (1 mes)</option>
+                          <option value="daily">📋 Diaria (24 horas)</option>
+                          <option value="hourly">🕐 Horaria (1 hora)</option>
+                          <option value="custom">⚙️ Personalizada...</option>
+                        </select>
+                      </div>
+
+                      {timeFrequency === "custom" && (
+                        <>
+                          <div className="temporal-control-group" style={{flex:'0 0 100px'}}>
+                            <label>Intervalo:</label>
+                            <input type="number" min="1" value={customTimeInterval} onChange={(e) => setCustomTimeInterval(Number(e.target.value))} />
+                          </div>
+                          <div className="temporal-control-group" style={{flex:'0 0 150px'}}>
+                            <label>Unidad:</label>
+                            <select value={customTimeUnit} onChange={(e) => setCustomTimeUnit(e.target.value)}>
+                              <option value="minutes">Minutos</option>
+                              <option value="hours">Horas</option>
+                              <option value="days">Días</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="temporal-toggle" style={{marginBottom:'16px'}}>
+                    <input type="checkbox" checked={temporalProcessingEnabled} onChange={(e) => setTemporalProcessingEnabled(e.target.checked)} />
+                    <span>Agregar datos a mayor resolución temporal</span>
+                  </div>
+                  <p style={{fontSize:'0.8em', color:'var(--fg-muted)', marginTop:'-10px', marginBottom:'16px', marginLeft:'54px'}}>
+                    Permite agregar desde una frecuencia menor a una mayor (ej: minutos → horas → días).
+                  </p>
+
+                  {temporalProcessingEnabled && (
+                    <div className="temporal-controls">
+                      <h4 style={{marginBottom:'12px'}}>Opciones de Agregación Ascendente</h4>
+
+                      <div className="temporal-controls-row">
+                        <div className="temporal-control-group">
+                          <label>Frecuencia objetivo:</label>
+                          <select value={temporalTargetFrequency} onChange={(e) => setTemporalTargetFrequency(e.target.value)}>
+                            {availableTargetFrequencies.includes("yearly") && <option value="yearly">📅 Anual</option>}
+                            {availableTargetFrequencies.includes("monthly") && <option value="monthly">📆 Mensual</option>}
+                            {availableTargetFrequencies.includes("daily") && <option value="daily">📋 Diaria</option>}
+                            {availableTargetFrequencies.includes("hourly") && <option value="hourly">🕐 Horaria</option>}
+                            {!availableTargetFrequencies.length && <option value="yearly">📅 Anual (default)</option>}
+                          </select>
+                        </div>
+
+                        <div className="temporal-control-group">
+                          <label>Método de agregación:</label>
+                          <select value={temporalAggregationMethod} onChange={(e) => setTemporalAggregationMethod(e.target.value)}>
+                            <option value="sum">∑ Suma (precipitación/volumen)</option>
+                            <option value="mean">Ø Promedio (temperatura/nivel)</option>
+                            <option value="max">↑ Máximo (caudal pico)</option>
+                            <option value="min">↓ Mínimo</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="temporal-controls-row" style={{marginTop:'12px'}}>
+                        <div className="temporal-control-group">
+                          <label className="temporal-toggle" style={{padding:0}}>
+                            <input type="checkbox" checked={temporalHydrologicalYear} onChange={(e) => setTemporalHydrologicalYear(e.target.checked)} />
+                            <span>Usar año hidrológico</span>
+                          </label>
+                        </div>
+
+                        {temporalHydrologicalYear && (
+                          <div className="temporal-control-group">
+                            <label>Mes de inicio:</label>
+                            <select value={temporalHydrologicalStartMonth} onChange={(e) => setTemporalHydrologicalStartMonth(Number(e.target.value))}>
+                              <option value={1}>Enero</option>
+                              <option value={2}>Febrero</option>
+                              <option value={3}>Marzo</option>
+                              <option value={4}>Abril</option>
+                              <option value={5}>Mayo</option>
+                              <option value={6}>Junio</option>
+                              <option value={7}>Julio</option>
+                              <option value={8}>Agosto</option>
+                              <option value={9}>Septiembre</option>
+                              <option value={10}>Octubre (default)</option>
+                              <option value={11}>Noviembre</option>
+                              <option value={12}>Diciembre</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      <button className="btn-primary" onClick={handleTemporalProcessing} disabled={temporalProcessingLoading} style={{width:'100%', marginTop:'16px'}}>
+                        {temporalProcessingLoading ? "⏳ Procesando..." : temporalProcessingResult ? "🔄 Reprocesar" : "▶️ Procesar datos"}
+                      </button>
+                    </div>
+                  )}
+
+                  {temporalProcessingError && (
+                    <div className="status-banner error" style={{marginBottom:'16px', marginTop:'16px'}}>{temporalProcessingError}</div>
+                  )}
+
+                  {temporalProcessingResult && (
+                    <div style={{marginBottom:'16px', padding:'12px', background:'var(--accent-light)', borderRadius:'8px', border:'1px solid rgba(10,143,116,0.2)'}}>
+                      <h4 style={{marginBottom:'8px', color:'var(--accent)'}}>✓ Procesamiento completado</h4>
+                      <div style={{fontSize:'0.85em'}}>
+                        <div><strong>Frecuencia original:</strong> {temporalProcessingResult.original_frequency}</div>
+                        <div><strong>Frecuencia objetivo:</strong> {temporalProcessingResult.target_frequency}</div>
+                        <div><strong>Resultado:</strong> {temporalProcessingResult.n_original} → {temporalProcessingResult.n_result} observaciones</div>
+                        <div><strong>Método:</strong> {temporalProcessingResult.aggregation_method}</div>
+                        {temporalProcessingResult.daily_start_hour > 0 && (
+                          <div><strong>Período diario:</strong> {temporalProcessingResult.daily_start_hour}:00 a {temporalProcessingResult.daily_start_hour}:00</div>
+                        )}
+                        {temporalProcessingResult.aggregation_bypass && (
+                          <div style={{color:'var(--warning)'}}>⚠ Serie ya estaba en la frecuencia solicitada (sin cambios)</div>
+                        )}
+                      </div>
+                      <button className="btn-secondary" onClick={handleRestoreOriginal} style={{marginTop:'12px'}}>↺ Restaurar serie original</button>
+                    </div>
+                  )}
+
+                  <div className="button-group" style={{marginTop:'16px'}}>
+                    <button className="btn-secondary" onClick={() => setImportStep("preview")}>← Volver</button>
+                    <button className="btn-primary" onClick={handleFinishImport}>Continuar al análisis →</button>
+                  </div>
                 </div>
-              </>
-            ) : (
-              <p>Configura y ejecuta el análisis para ver los resultados.</p>
-            )}
-          </div>
-        </div>
+              )}
 
-        {/* Cálculo de evento de diseño */}
-        {fitResults && selectedDistribution && (
-          <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #1f2e47" }}>
-            <h3>Cálculo de evento de diseño</h3>
-            <div style={{ display: "flex", gap: "18px", flexWrap: "wrap", alignItems: "flex-end", marginTop: "12px" }}>
-              <div style={{ flex: 1, minWidth: "200px" }}>
-                <label htmlFor="return-period">
-                  <strong>Período de retorno (años):</strong>
-                </label>
-                <input
-                  id="return-period"
-                  type="number"
-                  value={returnPeriod}
-                  onChange={(e) => setReturnPeriod(Number(e.target.value))}
-                  min="1"
-                  step="1"
-                  style={{ marginTop: "8px" }}
-                />
-              </div>
-              <button
-                type="button"
-                className="aqua-button"
-                onClick={handleDesignEvent}
-                disabled={isCalculatingDesign}
-              >
-                {isCalculatingDesign ? "Calculando..." : "Calcular evento de diseño"}
-              </button>
-            </div>
+              {fileError && <div className="status-banner error" style={{marginTop:'12px'}}>{fileError}</div>}
 
-            {designError && <div className="status-banner error" style={{ marginTop: "12px" }}>{designError}</div>}
-
-            {designEvent && (
-              <div className="status-card" style={{ marginTop: "18px" }}>
-                <strong>Resultado del evento de diseño</strong>
-                <div className="table-wrapper" style={{ marginTop: "12px" }}>
-                  <table>
+              {/* Data Table */}
+              <div className="card" id="tableCard" style={{display: series.length > 0 ? 'block' : 'none'}}>
+                <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+                    <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0'}}>Datos cargados</h3>
+                    <span style={{fontSize:'11px', padding:'2px 8px', borderRadius:'5px', background:'var(--bg-hover)', color:'var(--fg-muted)', fontWeight:'600'}}>{series.length}</span>
+                    <span style={{fontSize:'12px', color:'var(--fg-muted)'}}>{seriesId}</span>
+                  </div>
+                  <div style={{display:'flex', gap:'8px'}}>
+                    <button className="btn-secondary" onClick={addRow} style={{fontSize:'12px', padding:'6px 12px'}}>
+                      <i className="fas fa-plus" style={{marginRight:'4px'}}></i>Agregar fila
+                    </button>
+                    <button className="btn-secondary" onClick={() => { setSeries([]); showWarning('Todos los datos fueron eliminados', 'warning'); }} style={{fontSize:'12px', padding:'6px 12px', color:'var(--danger)', borderColor:'var(--danger-border)'}}>
+                      <i className="fas fa-trash-can" style={{marginRight:'4px'}}></i>Limpiar
+                    </button>
+                  </div>
+                </div>
+                <div style={{maxHeight:'360px', overflowY:'auto', borderRadius:'10px', border:'1px solid var(--border)'}}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th style={{width:'60px'}}>#</th>
+                        {dates.length > 0 && <th>Fecha</th>}
+                        <th>Valor</th>
+                        <th style={{width:'60px'}}>Acción</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      <tr>
-                        <th>Período de retorno</th>
-                        <td>{designEvent.return_period.toFixed(1)} años</td>
-                      </tr>
-                      <tr>
-                        <th>Probabilidad anual</th>
-                        <td>{(designEvent.annual_probability * 100).toFixed(2)}%</td>
-                      </tr>
-                      <tr>
-                        <th>Valor de diseño</th>
-                        <td style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#7dd3fc" }}>
-                          {designEvent.design_value.toFixed(2)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Distribución utilizada</th>
-                        <td>{designEvent.distribution_name}</td>
-                      </tr>
+                      {series.map((value, index) => {
+                        const isWarn = value <= 0;
+                        return (
+                          <tr
+                            key={`row-${index}`}
+                            className={isWarn ? "cell-error" : ""}
+                            style={{animation: `fadeUp 0.3s ease ${index * 0.02}s both`}}
+                          >
+                            <td style={{color:'var(--fg-muted)', fontSize:'12px'}}>{index + 1}</td>
+                            {dates.length > 0 && <td style={{fontSize:'0.85em', color:'var(--fg-muted)'}}>{dates[index] || '-'}</td>}
+                            <td className={isWarn ? 'warn-cell' : ''}>
+                              <input
+                                type="number"
+                                step="any"
+                                value={displayValue(value)}
+                                className={isWarn ? 'warn' : ''}
+                                data-index={index}
+                                onChange={(e) => updateByIndex(index, Number(e.target.value))}
+                              />
+                            </td>
+                            <td>
+                              <button className="btn-ghost" onClick={() => removeRow(index)} aria-label="Eliminar fila">
+                                <i className="fas fa-xmark"></i>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
+                <p style={{fontSize:'11.5px', color:'var(--fg-muted)', margin:'12px 0 0', display:'flex', alignItems:'center', gap:'6px'}}>
+                  <i className="fas fa-circle-info" style={{fontSize:'10px'}}></i>
+                  Las celdas con valores cero o negativos se resaltan y se consideran advertencias en el análisis.
+                </p>
               </div>
-            )}
-          </div>
-        )}
-      </section>
+            </section>
 
-      {/* ================================================================
-          SECCIÓN 5: VISUALIZACIONES Y GRÁFICOS (separada de Outliers)
-          ================================================================ */}
-      {analysisResults && (
-        <section className="glass-panel visualizations-section">
-          <h2>5. Visualizaciones y Gráficos</h2>
-          <p style={{ color: "#e2e8f0", marginBottom: "18px" }}>
-            Gráficos estadísticos generados desde el análisis SAMHIA.
-          </p>
-
-          <div className="visualizations-grid">
-            {/* Gráficos de Outliers con botón de carga */}
-            <div className="water-chart-box" style={{ gridColumn: "1 / -1" }}>
-              <div className="chart-title">
-                Análisis de Atípicos (Outliers)
-                {!outlierPlots && !outlierPlotsLoading && (
-                  <button
-                    type="button"
-                    className="btn-load-plots"
-                    onClick={handleLoadOutlierPlots}
-                    style={{ marginLeft: "16px", padding: "6px 14px", fontSize: "0.85rem" }}
-                  >
-                    Generar Gráficos
-                  </button>
-                )}
+            {/* ==================== SECCIÓN 2: RESUMEN ==================== */}
+            <section className={`section ${activeSection === 'resumen' ? 'active' : ''}`} id="sec-resumen" aria-label="Resumen de la serie">
+              <div style={{marginBottom:'28px'}}>
+                <h2 className="font-display" style={{fontSize:'26px', fontWeight:'700', margin:'0 0 8px', letterSpacing:'-0.02em'}}>Resumen de la serie</h2>
+                <p style={{color:'var(--fg-muted)', fontSize:'14.5px', maxWidth:'600px', lineHeight:'1.6'}}>Estadísticas descriptivas y gráficos exploratorios de la serie cargada.</p>
               </div>
-              <div className="chart-content">
-                {outlierPlotsLoading && (
-                  <div style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
-                    Generando gráficos de outliers...
+
+              {/* No Data State */}
+              {getValidData().length === 0 && (
+                <div className="card" style={{textAlign:'center', padding:'60px 24px'}}>
+                  <i className="fas fa-chart-bar" style={{fontSize:'40px', color:'var(--border)', marginBottom:'16px'}}></i>
+                  <p style={{fontSize:'15px', fontWeight:'600', color:'var(--fg-muted)', margin:'0 0 6px'}}>Sin datos cargados</p>
+                  <p style={{fontSize:'13px', color:'var(--border)', margin:'0'}}>Ve a la sección de Ingesta para cargar tu serie hidrológica.</p>
+                </div>
+              )}
+
+              {/* Data */}
+              {getValidData().length > 0 && (
+                <>
+                  {/* Stat Cards */}
+                  <div className="grid-stats">
+                    {(() => {
+                      const valid = getValidData();
+                      const n = valid.length;
+                      const mean = valid.reduce((a, b) => a + b, 0) / n;
+                      const std = Math.sqrt(valid.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1));
+                      const min = Math.min(...valid);
+                      const max = Math.max(...valid);
+                      const cv = mean !== 0 ? (std / Math.abs(mean)) : 0;
+                      return (
+                        <>
+                          <div className="stat-card">
+                            <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between'}}>
+                              <div>
+                                <div className="stat-value">{n}</div>
+                                <div className="stat-label">N de datos</div>
+                              </div>
+                              <div className="stat-icon" style={{background:'var(--accent-light)', color:'var(--accent)'}}><i className="fas fa-hashtag"></i></div>
+                            </div>
+                          </div>
+                          <div className="stat-card">
+                            <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between'}}>
+                              <div>
+                                <div className="stat-value">{mean.toFixed(2)}</div>
+                                <div className="stat-label">Media</div>
+                              </div>
+                              <div className="stat-icon" style={{background:'#eef0ff', color:'#6366f1'}}><i className="fas fa-equals"></i></div>
+                            </div>
+                          </div>
+                          <div className="stat-card">
+                            <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between'}}>
+                              <div>
+                                <div className="stat-value">{std.toFixed(2)}</div>
+                                <div className="stat-label">Desv. estándar</div>
+                              </div>
+                              <div className="stat-icon" style={{background:'var(--warning-bg)', color:'var(--warning)'}}><i className="fas fa-chart-area"></i></div>
+                            </div>
+                          </div>
+                          <div className="stat-card">
+                            <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between'}}>
+                              <div>
+                                <div className="stat-value">{min.toFixed(2)}</div>
+                                <div className="stat-label">Mínimo</div>
+                              </div>
+                              <div className="stat-icon" style={{background:'#eef6ff', color:'#3b82f6'}}><i className="fas fa-arrow-down"></i></div>
+                            </div>
+                          </div>
+                          <div className="stat-card">
+                            <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between'}}>
+                              <div>
+                                <div className="stat-value">{max.toFixed(2)}</div>
+                                <div className="stat-label">Máximo</div>
+                              </div>
+                              <div className="stat-icon" style={{background:'var(--danger-bg)', color:'var(--danger)'}}><i className="fas fa-arrow-up"></i></div>
+                            </div>
+                          </div>
+                          <div className="stat-card">
+                            <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between'}}>
+                              <div>
+                                <div className="stat-value">{(cv * 100).toFixed(2)}%</div>
+                                <div className="stat-label">Coef. variación</div>
+                              </div>
+                              <div className="stat-icon" style={{background:'#f5eeff', color:'#a855f7'}}><i className="fas fa-percent"></i></div>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
-                )}
-                {outlierPlotsError && (
-                  <div className="error-banner" style={{ marginBottom: "16px" }}>
-                    {outlierPlotsError}
-                    <button
-                      type="button"
-                      onClick={handleLoadOutlierPlots}
-                      style={{ marginLeft: "12px", padding: "4px 8px", fontSize: "0.8rem" }}
-                    >
-                      Reintentar
+
+                  {/* Warnings */}
+                  {warnings.length > 0 && (
+                    <div className="card status-banner warning" style={{marginBottom:'24px', borderColor:'var(--warning-border)'}}>
+                      <div style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px'}}>
+                        <div className="warning-badge"><div className="pulse-dot"></div>Advertencias detectadas</div>
+                      </div>
+                      {warnings.map((w) => (
+                        <p key={w.code} style={{fontSize:'13px', color:'var(--fg-muted)', margin:'0', lineHeight:'1.6'}}>
+                          {w.message} [{w.affected_indices.join(', ')}]
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Charts */}
+                  <div className="grid-charts">
+                    <div className="card">
+                      <h3 className="font-display" style={{fontSize:'14px', fontWeight:'600', margin:'0 0 16px', display:'flex', alignItems:'center', gap:'8px'}}>
+                        <i className="fas fa-braille" style={{color:'var(--accent)', fontSize:'12px'}}></i>Dispersión temporal
+                      </h3>
+                      <div className="chart-container">
+                        {(() => {
+                          const valid = getValidData();
+                          if (valid.length >= 2) {
+                            return <ScatterPlot values={valid} />;
+                          }
+                          return <p style={{color:'var(--fg-muted)'}}>Agrega más datos para ver el gráfico.</p>;
+                        })()}
+                      </div>
+                    </div>
+                    <div className="card">
+                      <h3 className="font-display" style={{fontSize:'14px', fontWeight:'600', margin:'0 0 16px', display:'flex', alignItems:'center', gap:'8px'}}>
+                        <i className="fas fa-bars-staggered" style={{color:'var(--accent)', fontSize:'12px'}}></i>Correlograma preliminar
+                      </h3>
+                      {getValidData().length >= 4 ? (
+                        <div className="chart-container">
+                          <Correlogram data={autoCorrelation} band={band} />
+                        </div>
+                      ) : (
+                        <div style={{textAlign:'center', padding:'60px 0'}}>
+                          <i className="fas fa-chart-bar" style={{fontSize:'32px', color:'var(--border)', marginBottom:'12px'}}></i>
+                          <p style={{fontSize:'13px', color:'var(--fg-muted)', margin:'0'}}>Necesitas al menos 4 datos para ver autocorrelación.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </section>
+
+            {/* ==================== SECCIÓN 3: SAMHIA ==================== */}
+            <section className={`section ${activeSection === 'samhia' ? 'active' : ''}`} id="sec-samhia" aria-label="Análisis SAMHIA">
+              <div style={{marginBottom:'28px'}}>
+                <h2 className="font-display" style={{fontSize:'26px', fontWeight:'700', margin:'0 0 8px', letterSpacing:'-0.02em'}}>Análisis SAMHIA y Reportes PDF</h2>
+                <p style={{color:'var(--fg-muted)', fontSize:'14.5px', maxWidth:'660px', lineHeight:'1.6'}}>Análisis estadístico completo basado en SAMHIA_EST.R con tests detallados y generación de reportes PDF de 10 páginas.</p>
+              </div>
+
+              <div className="grid-2col">
+                <div className="card">
+                  <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 20px'}}>Configuración del reporte</h3>
+                  <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
+                    <div>
+                      <label className="form-label" htmlFor="samEmbalse">Nombre del embalse</label>
+                      <input type="text" id="samEmbalse" className="form-input" value={reservoirName} onChange={(e) => setReservoirName(e.target.value)} placeholder="Ej: Embalse La Angostura" />
+                    </div>
+                    <div>
+                      <label className="form-label" htmlFor="samVariable">Nombre de la variable</label>
+                      <input type="text" id="samVariable" className="form-input" value={seriesName} onChange={(e) => setSeriesName(e.target.value)} placeholder="Ej: Caudal máximo mensual (m³/s)" />
+                    </div>
+                    <div>
+                      <label className="form-label" htmlFor="samAlpha">Nivel de significancia (α)</label>
+                      <select id="samAlpha" className="form-input" value={alpha} onChange={(e) => setAlpha(Number(e.target.value))}>
+                        <option value="0.01">0.01 (99%)</option>
+                        <option value="0.05">0.05 (95%)</option>
+                        <option value="0.10">0.10 (90%)</option>
+                      </select>
+                    </div>
+                    <div id="samDataReq" style={{
+                      padding:'10px 14px', borderRadius:'8px',
+                      background: 'var(--warning-bg)', border: '1px solid var(--warning-border)',
+                      fontSize:'12.5px', color:'var(--warning)', display:'flex', alignItems:'center', gap:'8px',
+                      ...(getValidData().filter(v => v > 0).length >= 12 ? {display:'none'} : {})
+                    }}>
+                      <i className="fas fa-triangle-exclamation"></i>
+                      Se requieren al menos 12 datos válidos para el análisis SAMHIA completo.
+                    </div>
+                    <button className="btn-primary" id="samGenerateBtn" onClick={handleGeneratePdf} disabled={isGeneratingPdf || getValidData().filter(v => v > 0).length < 12} style={{width:'100%', marginTop:'4px'}}>
+                      <i className="fas fa-file-pdf" style={{marginRight:'8px'}}></i>{isGeneratingPdf ? "Generando PDF..." : "Generar reporte PDF"}
                     </button>
                   </div>
-                )}
-                {outlierPlots?.plot_urls && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(500px, 1fr))", gap: "20px" }}>
-                    {/* Control Chart */}
-                    {outlierPlots.plot_urls.control_chart && (
-                      <div>
-                        <h6 style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#334155" }}>
-                          Gráfico de Control (Umbrales Kn)
-                        </h6>
-                        <img
-                          src={outlierPlots.plot_urls.control_chart}
-                          alt="Control Chart"
-                          style={{ width: "100%", borderRadius: "6px", border: "1px solid #e2e8f0" }}
-                        />
-                      </div>
+                </div>
+
+                <div className="card">
+                  <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 16px'}}>Contenido del reporte</h3>
+                  <p style={{fontSize:'13px', color:'var(--fg-muted)', margin:'0 0 14px'}}>El reporte PDF generado incluye las siguientes secciones:</p>
+                  <div className="feature-item"><i className="fas fa-check"></i><span>Gráficos de serie temporal, años calendario e hidrológico</span></div>
+                  <div className="feature-item"><i className="fas fa-check"></i><span>Análisis de datos atípicos y boxplots mensuales/anuales</span></div>
+                  <div className="feature-item"><i className="fas fa-check"></i><span>Histograma, Q-Q plot y función de autocorrelación</span></div>
+                  <div className="feature-item"><i className="fas fa-check"></i><span>Tablas resumen de estadísticas y año hidrológico</span></div>
+                  <div className="feature-item"><i className="fas fa-check"></i><span>Resultados de tests de independencia, homogeneidad y tendencia</span></div>
+                  <div style={{marginTop:'18px', padding:'14px', borderRadius:'10px', background:'var(--bg)', border:'1px solid var(--border)'}}>
+                    <div style={{display:'flex', alignItems:'center', gap:'8px', marginBottom:'6px'}}>
+                      <i className="fas fa-file-pdf" style={{color:'var(--danger)', fontSize:'18px'}}></i>
+                      <span style={{fontSize:'13px', fontWeight:'600'}}>10 páginas</span>
+                    </div>
+                    <p style={{fontSize:'11.5px', color:'var(--fg-muted)', margin:'0', lineHeight:'1.5'}}>Formato profesional listo para presentación o entrega técnica.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* PDF Generation Progress */}
+              <div style={{marginTop:'20px'}}>
+                <div className="card" style={{marginBottom:'20px'}}>
+                  <div className="button-group">
+                    <button className="btn-primary" onClick={handleAnalyzeSamhia} disabled={isAnalyzing || series.length < 12}>
+                      {isAnalyzing ? "Analizando..." : "Ejecutar análisis SAMHIA"}
+                    </button>
+                    {pdfPath && (
+                      <button className="btn-secondary" onClick={handleDownloadPdf}>
+                        Descargar PDF
+                      </button>
                     )}
-                    {/* Probability Plot */}
-                    {outlierPlots.plot_urls.probability_plot && (
-                      <div>
-                        <h6 style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#334155" }}>
-                          Gráfico de Probabilidad
-                        </h6>
-                        <img
-                          src={outlierPlots.plot_urls.probability_plot}
-                          alt="Probability Plot"
-                          style={{ width: "100%", borderRadius: "6px", border: "1px solid #e2e8f0" }}
-                        />
-                      </div>
+                  </div>
+
+                  {analysisError && <div className="status-banner error" style={{marginTop:'12px'}}>{analysisError}</div>}
+                  {pdfError && <div className="status-banner error" style={{marginTop:'12px'}}>{pdfError}</div>}
+
+                  {pdfPath && (
+                    <div className="status-pill accepted" style={{marginTop:'12px', display:'inline-flex'}}>
+                      PDF generado exitosamente
+                    </div>
+                  )}
+                </div>
+
+                {/* Analysis Results */}
+                {analysisResults && (
+                  <div className="card">
+                    <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 16px'}}>Resultados del análisis SAMHIA</h3>
+
+                    <div className="status-card" style={{marginBottom:'18px'}}>
+                      <strong>Análisis completado</strong>
+                      <p>Variable: <strong>{analysisResults.series_name}</strong></p>
+                      <p>Embalse: <strong>{analysisResults.reservoir_name}</strong></p>
+                      <p>N de datos: <strong>{analysisResults.n_data}</strong></p>
+                    </div>
+
+                    {/* Tabs */}
+                    <div style={{display:'flex', gap:'8px', marginBottom:'16px', flexWrap:'wrap'}}>
+                      {["analysis", "independence", "homogeneity", "trend", "outliers"].map((tab) => (
+                        <button
+                          key={tab}
+                          className={`btn-secondary ${activeSamhiaTab === tab ? 'selected-tab' : ''}`}
+                          onClick={() => setActiveSamhiaTab(tab)}
+                          style={{
+                            padding:'8px 16px', fontSize:'0.9rem',
+                            ...(activeSamhiaTab === tab ? {background:'var(--accent-light)', color:'var(--accent)', borderColor:'var(--accent)'} : {})
+                          }}
+                        >
+                          {tab === "analysis" && "Estadísticas"}
+                          {tab === "independence" && "Independencia"}
+                          {tab === "homogeneity" && "Homogeneidad"}
+                          {tab === "trend" && "Tendencia"}
+                          {tab === "outliers" && "Atípicos"}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Tab Content */}
+                    {activeSamhiaTab === "analysis" && (
+                      <DescriptiveStatsPanel stats={analysisResults.descriptive_stats} />
                     )}
-                    {/* Q-Q Plot */}
-                    {outlierPlots.plot_urls.qq_plot && (
-                      <div>
-                        <h6 style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#334155" }}>
-                          Q-Q Plot
-                        </h6>
-                        <img
-                          src={outlierPlots.plot_urls.qq_plot}
-                          alt="Q-Q Plot"
-                          style={{ width: "100%", borderRadius: "6px", border: "1px solid #e2e8f0" }}
-                        />
-                      </div>
+                    {activeSamhiaTab === "independence" && (
+                      <TestResultsPanel title="Tests de Independencia" tests={analysisResults.independence} description="Evalúan si los datos son independientes (no autocorrelacionados)." />
                     )}
-                    {/* FDP Plot */}
-                    {outlierPlots.plot_urls.fdp_plot && (
-                      <div>
-                        <h6 style={{ marginBottom: "8px", fontSize: "0.9rem", color: "#334155" }}>
-                          Función de Densidad de Probabilidad
-                        </h6>
-                        <img
-                          src={outlierPlots.plot_urls.fdp_plot}
-                          alt="FDP"
-                          style={{ width: "100%", borderRadius: "6px", border: "1px solid #e2e8f0" }}
-                        />
-                      </div>
+                    {activeSamhiaTab === "homogeneity" && (
+                      <TestResultsPanel title="Tests de Homogeneidad" tests={analysisResults.homogeneity} description="Evalúan si la serie es homogénea a lo largo del tiempo." />
+                    )}
+                    {activeSamhiaTab === "trend" && (
+                      <TestResultsPanel title="Tests de Tendencia" tests={analysisResults.trend} description="Evalúan si existe tendencia significativa en la serie." />
+                    )}
+                    {activeSamhiaTab === "outliers" && (
+                      <OutliersPanel tests={analysisResults.outliers} />
                     )}
                   </div>
                 )}
-                {!outlierPlots && !outlierPlotsLoading && !outlierPlotsError && (
-                  <div style={{ textAlign: "center", padding: "30px" }}>
-                    <p style={{ color: "#64748b", marginBottom: "12px" }}>
-                      Los gráficos de análisis de outliers no se han cargado.
-                    </p>
+
+                {analysisResults && (
+                  <div className="card visualizations-section">
+                    <OutlierVisualizationsPanel
+                      plots={outlierPlots}
+                      plotsLoading={outlierPlotsLoading}
+                      plotsError={outlierPlotsError}
+                      onLoadPlots={handleLoadOutlierPlots}
+                    />
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Gráficos rápidos de la serie */}
-            <div className="water-chart-box">
-              <div className="chart-title">Dispersión Temporal</div>
-              <div className="chart-content">
-                {series.length >= 2 ? (
-                  <ScatterPlot values={series} />
-                ) : (
-                  <p style={{ color: "#64748b" }}>Agrega más datos para ver el gráfico.</p>
-                )}
               </div>
-            </div>
+            </section>
 
-            <div className="water-chart-box">
-              <div className="chart-title">Correlograma Preliminar</div>
-              <div className="chart-content">
-                {series.length >= 4 ? (
-                  <Correlogram data={autoCorrelation} band={band} />
-                ) : (
-                  <p style={{ color: "#64748b" }}>Necesitas al menos 4 datos para ver autocorrelación.</p>
-                )}
+            {/* ==================== SECCIÓN 4: FRECUENCIA ==================== */}
+            <section className={`section ${activeSection === 'frecuencia' ? 'active' : ''}`} id="sec-frecuencia" aria-label="Análisis de Frecuencia">
+              <div style={{marginBottom:'28px'}}>
+                <h2 className="font-display" style={{fontSize:'26px', fontWeight:'700', margin:'0 0 8px', letterSpacing:'-0.02em'}}>Análisis de Frecuencia</h2>
+                <p style={{color:'var(--fg-muted)', fontSize:'14.5px', maxWidth:'640px', lineHeight:'1.6'}}>Ajusta distribuciones de probabilidad a tu serie y calcula eventos de diseño.</p>
               </div>
-            </div>
+
+              {getValidData().length === 0 && (
+                <div className="card" style={{textAlign:'center', padding:'60px 24px'}}>
+                  <i className="fas fa-wave-square" style={{fontSize:'40px', color:'var(--border)', marginBottom:'16px'}}></i>
+                  <p style={{fontSize:'15px', fontWeight:'600', color:'var(--fg-muted)', margin:'0 0 6px'}}>Sin datos cargados</p>
+                  <p style={{fontSize:'13px', color:'var(--border)', margin:'0'}}>Carga una serie hidrológica en la sección de Ingesta para ejecutar el análisis.</p>
+                </div>
+              )}
+
+              {getValidData().length > 0 && (
+                <>
+                  <div className="grid-2col" style={{marginBottom:'20px'}}>
+                    <div className="card">
+                      <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 16px'}}>Parámetros del análisis</h3>
+                      <div style={{marginBottom:'16px'}}>
+                        <label className="form-label" htmlFor="frecMethod">Método de estimación</label>
+                        <select id="frecMethod" className="form-input" value={estimationMethod} onChange={(e) => setEstimationMethod(e.target.value)}>
+                          {ESTIMATION_METHODS.map((method) => (
+                            <option key={method} value={method}>{method}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <p style={{fontSize:'12px', color:'var(--fg-muted)', margin:'0', lineHeight:'1.5'}}>
+                        <i className="fas fa-circle-info" style={{fontSize:'10px', marginRight:'4px'}}></i>
+                        El método L-Momentos es recomendado por SAMHIA para series hidrológicas con presencia de valores atípicos.
+                      </p>
+                    </div>
+                    <div className="card">
+                      <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 16px'}}>Distribuciones a ajustar</h3>
+                      <div className="grid-dists">
+                        {AVAILABLE_DISTRIBUTIONS.map((dist) => (
+                          <label key={dist} className="custom-check">
+                            <input type="checkbox" checked={selectedDistributions.includes(dist)} onChange={() => toggleDistribution(dist)} />
+                            <span className="check-box"><i className="fas fa-check"></i></span>
+                            <span>{dist}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button className="btn-primary" onClick={handleFit} disabled={isFitting || selectedDistributions.length === 0} style={{marginBottom:'24px'}}>
+                    <i className="fas fa-play" style={{marginRight:'8px'}}></i>
+                    {isFitting ? "Ajustando..." : "Ejecutar análisis de frecuencia"}
+                  </button>
+
+                  {fitError && <div className="status-banner error" style={{marginBottom:'24px'}}>{fitError}</div>}
+
+                  {/* Fit Results */}
+                  {fitResults && (
+                    <>
+                      <div className="card" style={{marginBottom:'20px'}}>
+                        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'18px'}}>
+                          <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0'}}>Resultados del ajuste</h3>
+                          <span className="status-pill accepted">
+                            <i className="fas fa-check-circle" style={{marginRight:'4px'}}></i>Completado
+                          </span>
+                        </div>
+
+                        {fitResults.recommended_distribution && (
+                          <div className="status-card" style={{marginBottom:'18px'}}>
+                            <strong>Distribución recomendada</strong>
+                            <span className="status-pill accepted" style={{marginTop:'8px', display:'inline-flex'}}>
+                              {fitResults.recommended_distribution.distribution_name}
+                            </span>
+                            <p style={{marginTop:'8px', fontSize:'0.9rem', color:'var(--fg-muted)'}}>
+                              Método: {fitResults.estimation_method} | N: {fitResults.n}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="accordion">
+                          {fitResults.distributions.map((dist) => (
+                            <DistributionResult
+                              key={dist.distribution_name}
+                              distribution={dist}
+                              isSelected={selectedDistribution?.distribution_name === dist.distribution_name}
+                              onSelect={() => setSelectedDistribution(dist)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Design Event */}
+                      {selectedDistribution && (
+                        <div className="card" style={{marginBottom:'20px'}}>
+                          <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 16px'}}>Cálculo de evento de diseño</h3>
+                          <div style={{display:'flex', gap:'18px', flexWrap:'wrap', alignItems:'flex-end'}}>
+                            <div style={{flex:1, minWidth:'200px'}}>
+                              <label className="form-label" htmlFor="returnPeriod">Período de retorno (años):</label>
+                              <input id="returnPeriod" type="number" className="form-input" value={returnPeriod} onChange={(e) => setReturnPeriod(Number(e.target.value))} min="1" step="1" />
+                            </div>
+                            <button className="btn-primary" onClick={handleDesignEvent} disabled={isCalculatingDesign}>
+                              {isCalculatingDesign ? "Calculando..." : "Calcular evento de diseño"}
+                            </button>
+                          </div>
+
+                          {designError && <div className="status-banner error" style={{marginTop:'12px'}}>{designError}</div>}
+
+                          {designEvent && (
+                            <div className="status-card" style={{marginTop:'18px'}}>
+                              <strong>Resultado del evento de diseño</strong>
+                              <div className="table-wrapper">
+                                <table>
+                                  <tbody>
+                                    <tr><th>Período de retorno</th><td>{designEvent.return_period.toFixed(1)} años</td></tr>
+                                    <tr><th>Probabilidad anual</th><td>{(designEvent.annual_probability * 100).toFixed(2)}%</td></tr>
+                                    <tr><th>Valor de diseño</th><td style={{fontSize:'1.1rem', fontWeight:'bold', color:'var(--accent)'}}>{designEvent.design_value.toFixed(2)}</td></tr>
+                                    <tr><th>Distribución utilizada</th><td>{designEvent.distribution_name}</td></tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </section>
           </div>
-        </section>
-      )}
-
-      {/* Contenedor de notificaciones Toast (Epic 4) */}
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
-
-    </div>
-  );
-}
-
-function ResultTable({ name, result }) {
-  return (
-    <div style={{ marginBottom: "16px" }}>
-      <h4>{name}</h4>
-      <div className="table-wrapper">
-        <table>
-          <tbody>
-            <tr>
-              <th>Estadístico</th>
-              <td>{result.statistic?.toFixed(4)}</td>
-            </tr>
-            <tr>
-              <th>Valor crítico</th>
-              <td>{result.critical_value?.toFixed(4)}</td>
-            </tr>
-            <tr>
-              <th>α</th>
-              <td>{result.alpha?.toFixed(2)}</td>
-            </tr>
-            <tr>
-              <th>Veredicto</th>
-              <td>{statusText(result.verdict)}</td>
-            </tr>
-          </tbody>
-        </table>
+        </main>
       </div>
-    </div>
+
+      {/* Toast Container */}
+      <div className="toast-container" id="toastContainer" aria-live="polite">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.type} ${toast.removing ? 'removing' : ''}`}
+            onClick={() => removeToast(toast.id)}
+          >
+            <i className={`fas ${toast.type === 'success' ? 'fa-check-circle' : toast.type === 'warning' ? 'fa-triangle-exclamation' : toast.type === 'error' ? 'fa-circle-xmark' : 'fa-circle-info'}`}></i>
+            <span>{toast.message}</span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
-function AccordionItem({ title, description, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="accordion-item">
-      <button className="accordion-button" type="button" onClick={() => setOpen((prev) => !prev)}>
-        <span>
-          {title} <small>{description}</small>
-        </span>
-        <span>{open ? "▲" : "▼"}</span>
-      </button>
-      {open ? <div className="accordion-panel">{children}</div> : null}
-    </div>
-  );
-}
+// =============================================================================
+// SUBCOMPONENTES - SVG GRÁFICOS
+// =============================================================================
 
 function ScatterPlot({ values }) {
   const width = 560;
@@ -2337,11 +2159,11 @@ function ScatterPlot({ values }) {
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="260">
-      <rect x="0" y="0" width="100%" height="100%" fill="#08101f" />
-      <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#334155" />
-      <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#334155" />
+      <rect x="0" y="0" width="100%" height="100%" fill="var(--bg)" />
+      <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="var(--border)" />
+      <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="var(--border)" />
       {points.map((point, index) => (
-        <circle key={index} cx={point.x} cy={point.y} r="4" fill="#60a5fa" />
+        <circle key={index} cx={point.x} cy={point.y} r="4" fill="var(--accent)" />
       ))}
     </svg>
   );
@@ -2355,8 +2177,8 @@ function Correlogram({ data, band }) {
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="260">
-      <rect x="0" y="0" width="100%" height="100%" fill="#08101f" />
-      <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#334155" />
+      <rect x="0" y="0" width="100%" height="100%" fill="var(--bg)" />
+      <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="var(--border)" />
       <line
         x1={padding}
         y1={padding + ((1 - band / maxValue) * (height - padding * 2)) / 2}
@@ -2378,21 +2200,14 @@ function Correlogram({ data, band }) {
         const y = height / 2 - (item.value / maxValue) * ((height - padding * 2) / 2);
         return (
           <g key={item.lag}>
-            <line
-              x1={x}
-              y1={height / 2}
-              x2={x}
-              y2={y}
-              stroke="#7dd3fc"
-              strokeWidth="10"
-            />
-            <text x={x} y={height - 12} fill="#cbd5e1" fontSize="12" textAnchor="middle">
+            <line x1={x} y1={height / 2} x2={x} y2={y} stroke="#7dd3fc" strokeWidth="10" />
+            <text x={x} y={height - 12} fill="var(--fg-muted)" fontSize="12" textAnchor="middle">
               {item.lag}
             </text>
           </g>
         );
       })}
-      <text x={padding} y={padding - 6} fill="#cbd5e1" fontSize="12">
+      <text x={padding} y={padding - 6} fill="var(--fg-muted)" fontSize="12">
         Banda 95% ±{band.toFixed(3)}
       </text>
     </svg>
@@ -2409,37 +2224,27 @@ function DistributionResult({ distribution, isSelected, onSelect }) {
   return (
     <div className="accordion-item">
       <button
-        className={`accordion-button ${isSelected ? "selected" : ""}`}
+        className={`accordion-button ${isSelected ? 'selected' : ''}`}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        style={{
-          background: isSelected ? "rgba(59, 130, 246, 0.1)" : "transparent",
-        }}
       >
         <span>
           {distribution.distribution_name}
           {distribution.is_recommended && (
-            <span className="pill accepted" style={{ marginLeft: "8px", fontSize: "0.8rem" }}>
-              Recomendada
-            </span>
+            <span className="pill accepted" style={{marginLeft:'8px', fontSize:'0.8rem'}}>Recomendada</span>
           )}
         </span>
         <span>{open ? "▲" : "▼"}</span>
       </button>
       {open && (
         <div className="accordion-panel">
-          <div style={{ marginBottom: "12px" }}>
-            <button
-              type="button"
-              className="aqua-button secondary"
-              onClick={onSelect}
-              style={{ fontSize: "0.9rem", padding: "8px 14px" }}
-            >
+          <div style={{marginBottom:'12px'}}>
+            <button type="button" className="btn-secondary" onClick={onSelect} style={{fontSize:'0.9rem', padding:'8px 14px'}}>
               {isSelected ? "Seleccionada" : "Seleccionar para evento de diseño"}
             </button>
           </div>
 
-          <div style={{ marginBottom: "16px" }}>
+          <div style={{marginBottom:'16px'}}>
             <h4>Parámetros</h4>
             <div className="table-wrapper">
               <table>
@@ -2519,14 +2324,14 @@ function DescriptiveStatsPanel({ stats }) {
 
   return (
     <div>
-      <h4 style={{ marginBottom: "12px" }}>Estadísticas Descriptivas</h4>
+      <h4 style={{marginBottom:'12px'}}>Estadísticas Descriptivas</h4>
       <div className="table-wrapper">
         <table>
           <tbody>
             {statsData.map((stat) => (
               <tr key={stat.label}>
-                <th style={{ textAlign: "left", width: "50%" }}>{stat.label}</th>
-                <td style={{ textAlign: "right" }}>{stat.value}</td>
+                <th style={{textAlign:'left', width:'50%'}}>{stat.label}</th>
+                <td style={{textAlign:'right'}}>{stat.value}</td>
               </tr>
             ))}
           </tbody>
@@ -2542,18 +2347,16 @@ function TestResultsPanel({ title, tests, description }) {
   if (testEntries.length === 0) {
     return (
       <div>
-        <h4 style={{ marginBottom: "12px" }}>{title}</h4>
-        <p style={{ color: "#e2e8f0" }}>No hay resultados disponibles.</p>
+        <h4 style={{marginBottom:'12px'}}>{title}</h4>
+        <p style={{color:'var(--fg-muted)'}}>No hay resultados disponibles.</p>
       </div>
     );
   }
 
   return (
     <div>
-      <h4 style={{ marginBottom: "12px" }}>{title}</h4>
-      <p style={{ color: "#e2e8f0", marginBottom: "12px", fontSize: "0.9rem" }}>
-        {description}
-      </p>
+      <h4 style={{marginBottom:'12px'}}>{title}</h4>
+      <p style={{color:'var(--fg-muted)', marginBottom:'12px', fontSize:'0.9rem'}}>{description}</p>
       <div className="table-wrapper">
         <table>
           <thead>
@@ -2583,10 +2386,9 @@ function TestResultsPanel({ title, tests, description }) {
         </table>
       </div>
 
-      <div style={{ marginTop: "16px" }}>
+      <div style={{marginTop:'16px'}}>
         {testEntries.map(([key, result]) => {
           if (!result.detail) return null;
-          // Convert detail to readable string if it's an object
           let detailText;
           if (typeof result.detail === 'string') {
             detailText = result.detail;
@@ -2598,12 +2400,85 @@ function TestResultsPanel({ title, tests, description }) {
             return null;
           }
           return (
-            <p key={`detail-${key}`} style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "4px" }}>
+            <p key={`detail-${key}`} style={{fontSize:'0.85rem', color:'var(--fg-muted)', marginBottom:'4px'}}>
               <strong>{formatTestName(key)}:</strong> {detailText}
             </p>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function OutlierVisualizationsPanel({ plots, plotsLoading, plotsError, onLoadPlots }) {
+  const plotItems = [
+    { key: "control_chart", title: "Serie temporal con umbrales Kn" },
+    { key: "probability_plot", title: "Probability plot" },
+    { key: "qq_plot", title: "Q-Q plot" },
+    { key: "fdp_plot", title: "Función de densidad de probabilidad" },
+  ];
+  const plotUrls = plots?.plot_urls || {};
+  const hasPlots = Object.keys(plotUrls).length > 0;
+
+  return (
+    <div>
+      <div style={{display:'flex', justifyContent:'space-between', gap:'16px', alignItems:'center', flexWrap:'wrap', marginBottom:'16px'}}>
+        <div>
+          <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 6px'}}>Visualizaciones del análisis SAMHIA</h3>
+          <p style={{fontSize:'13px', color:'var(--fg-muted)', margin:0, lineHeight:'1.5'}}>
+            Gráficos generados para la detección de valores atípicos.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-load-plots"
+          onClick={onLoadPlots}
+          disabled={plotsLoading}
+        >
+          <i className="fas fa-chart-line"></i>
+          {plotsLoading ? "Generando gráficos..." : hasPlots ? "Actualizar gráficos" : "Generar gráficos"}
+        </button>
+      </div>
+
+      {plotsError && <div className="status-banner error" style={{marginBottom:'12px'}}>{plotsError}</div>}
+
+      {plotsLoading && (
+        <div className="status-card">
+          Generando visualizaciones del análisis...
+        </div>
+      )}
+
+      {!plotsLoading && !hasPlots && !plotsError && (
+        <p style={{fontSize:'13px', color:'var(--fg-muted)', margin:0}}>
+          Usa el botón para generar los gráficos asociados al análisis.
+        </p>
+      )}
+
+      {hasPlots && (
+        <>
+          {plots.outliers_detected !== undefined && (
+            <div className="status-card" style={{marginBottom:'16px'}}>
+              Atípicos detectados: <strong>{plots.outliers_detected}</strong>
+            </div>
+          )}
+          <div className="visualizations-grid">
+            {plotItems.map((plot) => (
+              plotUrls[plot.key] ? (
+                <div key={plot.key} className="water-chart-box">
+                  <div className="chart-title">{plot.title}</div>
+                  <div className="chart-content">
+                    <img
+                      src={plotUrls[plot.key]}
+                      alt={plot.title}
+                      style={{width:'100%', height:'auto', display:'block', borderRadius:'8px'}}
+                    />
+                  </div>
+                </div>
+              ) : null
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2627,3 +2502,7 @@ function formatTestName(key) {
   };
   return names[key] || key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
 }
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function hashStr(str) { let h = 0; for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i); return Math.abs(h); }
+function r(seed) { const x = Math.sin(seed * 9301 + 49297) * 49297; return x - Math.floor(x); }
