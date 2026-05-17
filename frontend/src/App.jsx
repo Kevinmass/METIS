@@ -790,6 +790,7 @@ export default function App() {
     }
 
     setIsAnalyzing(true);
+    const loadingStartedAt = Date.now();
     try {
       const analysisDates = dates.length === validData.length
         ? dates
@@ -827,6 +828,10 @@ export default function App() {
       setAnalysisError(msg);
       showError(msg, { title: "Error de conexión" });
     } finally {
+      const elapsed = Date.now() - loadingStartedAt;
+      if (elapsed < 500) {
+        await new Promise((resolve) => setTimeout(resolve, 500 - elapsed));
+      }
       setIsAnalyzing(false);
     }
   };
