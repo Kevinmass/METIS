@@ -70,6 +70,9 @@ def test_ui_ingesta_manual(page: Page):
         3
     )  # 2 valores negativos/cero + 1 valor por defecto 0
 
+    # Navegar a resumen para ver las advertencias
+    page.locator("button.nav-item", has_text="Resumen de la serie").click()
+
     # Verificar advertencias
     expect(page.locator(".status-banner.warning")).to_be_visible()
     expect(
@@ -119,7 +122,7 @@ def test_ui_resultados_semaforo(page: Page):
 
     Escenario:
         1. Usuario carga serie de referencia
-        2. Ejecuta análisis SAMHIA
+        2. Navega a SAMHIA vía sidebar y ejecuta análisis
         3. Sistema muestra resultados con pills de estado
 
     Valida:
@@ -142,9 +145,8 @@ def test_ui_resultados_semaforo(page: Page):
     expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
     page.get_by_role("button", name="Continuar al análisis").click()
 
-    # Scroll a sección SAMHIA y ejecutar análisis
-    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
-    samhia_heading.scroll_into_view_if_needed()
+    # Navegar a SAMHIA vía sidebar para ejecutar análisis
+    page.locator("button.nav-item", has_text="Análisis SAMHIA").click()
     samhia_section = page.locator("section", has_text="Análisis SAMHIA").first
     analyze_button = samhia_section.locator(
         "button", has_text="Ejecutar análisis SAMHIA"
@@ -168,7 +170,8 @@ def test_ui_graficos(page: Page):
     Escenario:
         1. Usuario carga serie
         2. Completa flujo de importación
-        3. Gráficos se renderizan automáticamente
+        3. Navega a Resumen de la serie para ver gráficos
+        4. Gráficos se renderizan automáticamente
 
     Valida:
         - Título de dispersión temporal visible
@@ -193,6 +196,9 @@ def test_ui_graficos(page: Page):
     # Esperar paso de procesamiento y continuar
     expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
     page.get_by_role("button", name="Continuar al análisis").click()
+
+    # Navegar a resumen de la serie para ver los gráficos
+    page.locator("button.nav-item", has_text="Resumen de la serie").click()
 
     # Verificar gráfico de dispersión
     expect(page.locator("text=Dispersión temporal")).to_be_visible()

@@ -14,13 +14,23 @@ Requiere:
 from playwright.sync_api import Page, expect
 
 
+def navigate_samhia_via_sidebar(page: Page):
+    """Navega a la sección SAMHIA usando la barra lateral."""
+    page.locator("button.nav-item", has_text="Análisis SAMHIA").click()
+
+
+def navigate_resumen_via_sidebar(page: Page):
+    """Navega a la sección de resumen usando la barra lateral."""
+    page.locator("button.nav-item", has_text="Resumen de la serie").click()
+
+
 def test_ui_resultados(page: Page):
     """Test renderizado completo de sección de resultados SAMHIA.
 
     Escenario:
         1. Usuario carga serie de referencia 1
         2. Completa flujo de importación con preview
-        3. Ejecuta análisis SAMHIA
+        3. Navega a SAMHIA y ejecuta análisis
         4. Espera que termine el procesamiento
         5. Sistema muestra resultados estructurados
 
@@ -45,9 +55,8 @@ def test_ui_resultados(page: Page):
     expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
     page.get_by_role("button", name="Continuar al análisis").click()
 
-    # Scroll a sección SAMHIA y ejecutar análisis
-    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
-    samhia_heading.scroll_into_view_if_needed()
+    # Navegar a SAMHIA vía sidebar para ejecutar análisis
+    navigate_samhia_via_sidebar(page)
     samhia_section = page.locator("section", has_text="Análisis SAMHIA").first
     analyze_button = samhia_section.locator(
         "button", has_text="Ejecutar análisis SAMHIA"
@@ -82,7 +91,8 @@ def test_ui_graficos_detalle(page: Page):
     Escenario:
         1. Usuario carga serie de referencia
         2. Completa flujo de importación
-        3. Gráficos se renderizan con datos reales
+        3. Navega a Resumen de la serie
+        4. Gráficos se renderizan con datos reales
 
     Valida:
         - Elemento SVG de gráfico visible
@@ -106,6 +116,9 @@ def test_ui_graficos_detalle(page: Page):
     # Esperar paso de procesamiento y continuar
     expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
     page.get_by_role("button", name="Continuar al análisis").click()
+
+    # Navegar a resumen de la serie para ver los gráficos
+    navigate_resumen_via_sidebar(page)
 
     # Verificar SVG de dispersión
     svg = page.locator("svg").first

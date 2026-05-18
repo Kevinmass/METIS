@@ -57,4 +57,4 @@ tests/e2e/test_ui_samhia.py::TestUISamhiaEdgeCases::test_csv_with_missing_values
 tests/e2e/test_ui_samhia.py::TestUISamhiaEdgeCases::test_very_long_series_name[chromium] PASSED                  [ 97%]
 tests/e2e/test_ui_samhia.py::TestUISamhiaEdgeCases::test_special_characters_in_names[chromium] PASSED            [100%]
 
-============================================ 49 passed in 75.86s (0:01:15) ============================================
+=========================================== 49 passed in 126.36s (0:02:06) ========================================

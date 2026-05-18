@@ -16,8 +16,8 @@ Requisitos:
     - Frontend corriendo en http://localhost:5173
     - pytest-playwright instalado
 
-Nota: Después de la unificación del frontend, SAMHIA está integrado
-en la página principal como la "Sección 5: Análisis SAMHIA".
+Nota: Después de la corrección del acordeón, las secciones se ocultan
+cuando no están activas. Los tests navegan usando la barra lateral.
 """
 
 import pytest
@@ -31,26 +31,61 @@ API_HEALTH_URL = "http://localhost:8000/health"
 
 @pytest.fixture
 def samhia_page(page: Page):
-    """Fixture que navega a la página principal donde está integrado SAMHIA."""
+    """Fixture que navega a la página principal y hace click en la sección SAMHIA."""
     page.goto(FRONTEND_URL)
-    # El módulo SAMHIA está ahora en la misma página, hacer scroll para verlo
-    samhia_heading = page.locator("h2", has_text="Análisis SAMHIA")
-    samhia_heading.scroll_into_view_if_needed()
+    # Navegar a la sección SAMHIA haciendo click en la barra lateral
+    page.locator("button.nav-item", has_text="Análisis SAMHIA").click()
     return page
+
+
+def navigate_samhia_via_sidebar(page: Page):
+    """Navega a la sección SAMHIA usando la barra lateral."""
+    page.locator("button.nav-item", has_text="Análisis SAMHIA").click()
+
+
+def navigate_ingesta_via_sidebar(page: Page):
+    """Navega a la sección de ingesta usando la barra lateral."""
+    page.locator("button.nav-item", has_text="Ingesta de datos").click()
+
+
+def navigate_resumen_via_sidebar(page: Page):
+    """Navega a la sección de resumen usando la barra lateral."""
+    page.locator("button.nav-item", has_text="Resumen de la serie").click()
+
+
+def complete_import_flow(page: Page, csv_path: str):
+    """Completa el flujo de importación: subir"""
+    """CSV -> preview -> importar -> procesar -> continuar."""
+    # Navegar a ingesta primero
+    navigate_ingesta_via_sidebar(page)
+
+    ingest_section = page.locator("section", has_text="Ingesta de datos").first
+    file_input = ingest_section.locator("input[type='file']")
+    file_input.set_input_files(csv_path)
+
+    # Preview
+    expect(page.locator("text=Preview:")).to_be_visible()
+    page.get_by_role("button", name="Importar datos").click()
+
+    # Procesamiento temporal
+    expect(page.locator("text=Procesamiento Temporal")).to_be_visible()
+    page.get_by_role("button", name="Continuar al análisis").click()
 
 
 class TestUISamhiaNavigation:
     """Tests de navegación al módulo SAMHIA (ahora integrado en la página principal)."""
 
     def test_samhia_section_visible(self, page_with_api: Page):
-        """Test de que la sección SAMHIA es visible en la página principal."""
+        """Test de que la sección SAMHIA es visible al navegar por sidebar."""
         page_with_api.goto(FRONTEND_URL)
+        page_with_api.locator("button.nav-item", has_text="Análisis SAMHIA").click()
         samhia_heading = page_with_api.locator("h2", has_text="Análisis SAMHIA")
         expect(samhia_heading).to_be_visible()
 
     def test_samhia_section_scrollable(self, page_with_api: Page):
         """Test de que se puede hacer scroll a la sección SAMHIA."""
         page_with_api.goto(FRONTEND_URL)
+        page_with_api.locator("button.nav-item", has_text="Análisis SAMHIA").click()
         samhia_heading = page_with_api.locator("h2", has_text="Análisis SAMHIA")
         samhia_heading.scroll_into_view_if_needed()
         expect(samhia_heading).to_be_in_viewport()
@@ -78,17 +113,20 @@ class TestUISamhiaDataIngest:
 
     def test_file_dropzone_visible(self, samhia_page: Page):
         """Test de que la zona de drop de archivos es visible."""
+        # La zona de drop está en ingesta, no en SAMHIA
+        navigate_ingesta_via_sidebar(samhia_page)
         dropzone = samhia_page.get_by_text("Arrastra un CSV o Excel aquí")
         expect(dropzone).to_be_visible()
 
     def test_file_input_accepts_csv(self, samhia_page: Page):
         """Test de que el input de archivo acepta CSV."""
+        navigate_ingesta_via_sidebar(samhia_page)
         file_input = samhia_page.locator("input[type='file']")
         expect(file_input).to_have_attribute("accept", ".csv,.xlsx,.xls")
 
     def test_reservoir_name_input(self, samhia_page: Page):
         """Test del input de nombre de embalse."""
-        # Buscar dentro de la sección SAMHIA (despues de hacer scroll)
+        # Buscar dentro de la sección SAMHIA
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
         ).first
@@ -124,18 +162,11 @@ class TestUISamhiaDataIngest:
             csv_content += f"2020-{i:02d}-01,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        # Subir archivo en la sección 1 (ingesta de datos)
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        # Subir archivo usando helper
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación (preview -> importar -> procesar -> continuar)
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para verificar botón
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Los datos se comparten con la sección SAMHIA
         # Verificar que el botón de análisis SAMHIA está habilitado
@@ -156,24 +187,11 @@ class TestUISamhiaDataIngest:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i * 2}\n"
         csv_file.write_text(csv_content)
 
-        # Subir archivo en la sección de ingesta
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        # Subir archivo usando helper
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
-
-        # Verificar resumen en sección SAMHIA (ahora muestra 15 datos)
-        samhia_section = samhia_page.locator(
-            "section", has_text="Análisis SAMHIA"
-        ).first
-        # El resumen se muestra en la sección 2 (Resumen de la serie)
+        # Navegar a resumen de la serie para verificar
+        navigate_resumen_via_sidebar(samhia_page)
         summary = samhia_page.locator("section", has_text="Resumen de la serie").first
         expect(summary).to_contain_text("15")
 
@@ -201,18 +219,11 @@ class TestUISamhiaAnalysisExecution:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        # Subir archivo en la sección de ingesta
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        # Subir archivo usando helper
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para verificar botón
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Verificar botón habilitado en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -232,18 +243,11 @@ class TestUISamhiaAnalysisExecution:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        # Subir archivo en la sección de ingesta
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        # Subir archivo usando helper
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para ejecutar análisis
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Clic en analizar en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -266,12 +270,11 @@ class TestUISamhiaAnalysisExecution:
         csv_content = "date,value\n2020-01-01,10\n2020-02-01,12\n"
         csv_file.write_text(csv_content)
 
-        # Subir archivo en la sección de ingesta
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        # Subir archivo usando helper
+        complete_import_flow(samhia_page, str(csv_file))
+
+        # Navegar a SAMHIA para ver mensaje de error
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Verificar mensaje de error en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -293,17 +296,11 @@ class TestUISamhiaResultsDisplay:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        # Subir archivo usando helper
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para ejecutar análisis
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Ejecutar análisis en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -339,17 +336,10 @@ class TestUISamhiaResultsDisplay:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para ejecutar análisis
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Ejecutar análisis en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -371,17 +361,10 @@ class TestUISamhiaResultsDisplay:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para ejecutar análisis
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Ejecutar análisis en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -414,17 +397,10 @@ class TestUISamhiaResultsDisplay:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para ejecutar análisis
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Ejecutar análisis en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -445,7 +421,7 @@ class TestUISamhiaPdfGeneration:
 
     def test_pdf_section_visible(self, samhia_page: Page):
         """Test de que la sección de PDF es visible dentro del módulo SAMHIA."""
-        # La sección PDF está integrada en "5. Análisis SAMHIA y Reportes PDF"
+        # La sección PDF está integrada en "3. Análisis SAMHIA y Reportes PDF"
         # Buscar el botón "Generar reporte PDF" que es el elemento principal
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA y Reportes PDF"
@@ -470,18 +446,11 @@ class TestUISamhiaPdfGeneration:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        # Subir archivo en la sección de ingesta
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        # Subir archivo usando helper
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para verificar botón
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Verificar botón habilitado en sección SAMHIA
         samhia_section = samhia_page.locator(
@@ -499,17 +468,10 @@ class TestUISamhiaPdfGeneration:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
+        # Navegar a SAMHIA para generar PDF
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Clic en generar PDF
         samhia_section = samhia_page.locator(
@@ -534,27 +496,10 @@ class TestUISamhiaPdfGeneration:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
-
-        # Esperar a que el archivo se procese y el resumen se actualice
-        summary_section = samhia_page.locator(
-            "section", has_text="Resumen de la serie"
-        ).first
-        expect(summary_section).to_contain_text("15")
-
-        # Scroll a la sección SAMHIA para asegurar que está visible
-        samhia_heading = samhia_page.locator("h2", has_text="Análisis SAMHIA")
-        samhia_heading.scroll_into_view_if_needed()
+        # Navegar a SAMHIA para generar PDF
+        navigate_samhia_via_sidebar(samhia_page)
 
         # Generar PDF
         samhia_section = samhia_page.locator(
@@ -591,31 +536,16 @@ class TestUISamhiaCompleteWorkflow:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i * 1.5}\n"
         csv_file.write_text(csv_content)
 
-        # 2. Cargar archivo en sección de ingesta
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        # 2. Cargar archivo usando helper
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # 3. Completar flujo de importación (preview -> importar -> procesar)
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
-
-        # Verificar carga exitosa
-        summary_section = samhia_page.locator(
-            "section", has_text="Resumen de la serie"
-        ).first
-        expect(summary_section).to_contain_text("20")
-
-        # 4. Obtener sección SAMHIA
+        # 3. Obtener sección SAMHIA (helper ya navegó a ingesta, volver a SAMHIA)
+        navigate_samhia_via_sidebar(samhia_page)
         samhia_section = samhia_page.locator(
             "section", has_text="Análisis SAMHIA"
         ).first
 
-        # 5. Configurar parámetros
+        # 4. Configurar parámetros
         samhia_section.locator("input[type='text']").first.fill("Embalse de Prueba")
         samhia_section.locator("input[type='text']").nth(1).fill("Caudal Mensual")
 
@@ -678,7 +608,7 @@ class TestUISamhiaCompleteWorkflow:
         expect(samhia_section.locator("text=PDF generado exitosamente")).to_be_visible()
 
     def test_data_preserved_when_scrolling(self, samhia_page: Page, tmp_path):
-        """Test de que los datos se preservan al hacer scroll."""
+        """Test de que los datos se preservan al navegar entre secciones."""
         # Crear y cargar archivo
         csv_file = tmp_path / "test_preserve.csv"
         csv_content = "date,value\n"
@@ -686,21 +616,11 @@ class TestUISamhiaCompleteWorkflow:
             csv_content += f"2020-{((i % 12) + 1):02d}-15,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
-
-        # Hacer scroll a otra sección y volver
-        samhia_heading = samhia_page.locator("h2", has_text="Análisis SAMHIA")
-        samhia_heading.scroll_into_view_if_needed()
+        # Navegar a otra sección y volver
+        navigate_samhia_via_sidebar(samhia_page)
+        navigate_resumen_via_sidebar(samhia_page)
 
         # Verificar que los datos siguen cargados en resumen
         summary_section = samhia_page.locator(
@@ -718,7 +638,9 @@ class TestUISamhiaEdgeCases:
         txt_file = tmp_path / "invalid.txt"
         txt_file.write_text("esto no es un csv valido")
 
-        # Intentar subir en sección de ingesta
+        # Navegar a ingesta para subir archivo
+        navigate_ingesta_via_sidebar(samhia_page)
+
         ingest_section = samhia_page.locator(
             "section", has_text="Ingesta de datos"
         ).first
@@ -730,6 +652,9 @@ class TestUISamhiaEdgeCases:
         """Test de manejo de archivo CSV vacío."""
         csv_file = tmp_path / "empty.csv"
         csv_file.write_text("date,value\n")
+
+        # Navegar a ingesta para subir archivo
+        navigate_ingesta_via_sidebar(samhia_page)
 
         ingest_section = samhia_page.locator(
             "section", has_text="Ingesta de datos"
@@ -755,19 +680,10 @@ class TestUISamhiaEdgeCases:
             csv_content += f"2020-{((i % 12) + 1):02d}-01,{10 + i}\n"
         csv_file.write_text(csv_content)
 
-        ingest_section = samhia_page.locator(
-            "section", has_text="Ingesta de datos"
-        ).first
-        file_input = ingest_section.locator("input[type='file']")
-        file_input.set_input_files(str(csv_file))
+        complete_import_flow(samhia_page, str(csv_file))
 
-        # Completar flujo de importación
-        expect(samhia_page.locator("text=Preview:")).to_be_visible()
-        samhia_page.get_by_role("button", name="Importar datos").click()
-        expect(samhia_page.locator("text=Procesamiento Temporal")).to_be_visible()
-        samhia_page.get_by_role("button", name="Continuar al análisis").click()
-
-        # Debería cargar los datos válidos y mostrar resumen
+        # Debería cargar los datos válidos - navegar a resumen
+        navigate_resumen_via_sidebar(samhia_page)
         summary_section = samhia_page.locator(
             "section", has_text="Resumen de la serie"
         ).first

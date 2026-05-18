@@ -224,7 +224,7 @@ body {
 .section.active {
   display: block;
 }
-#sec-frecuencia:not(.active) {
+.section:not(.active) {
   display: none;
 }
 @keyframes fadeUp {
