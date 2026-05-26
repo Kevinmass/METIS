@@ -434,23 +434,56 @@ function extractExcelData(buffer, dateColumn, valueColumn, previewInfo, sheetInd
 
 /**
  * Construye lista de advertencias para valores problemáticos.
+ * Detecta y categoriza: negativos, cero, y valores virtualmente cero.
  *
  * @param {number[]} series - Serie de valores
  * @returns {Array<{code, message, affected_indices}>} Lista de advertencias
  */
 function buildWarnings(series) {
   const warnings = [];
-  const indices = series
+
+  const negativeIndices = series
     .map((value, index) => ({ value, index }))
-    .filter((item) => item.value === 0 || item.value < 0)
+    .filter((item) => typeof item.value === 'number' && item.value < 0)
     .map((item) => item.index);
-  if (indices.length > 0) {
+
+  if (negativeIndices.length > 0) {
     warnings.push({
-      code: "NEGATIVE_OR_ZERO_VALUES",
-      message: `Se encontraron ${indices.length} valores negativos o cero.`,
-      affected_indices: indices,
+      code: "NEGATIVE_VALUES",
+      message: `Se encontraron ${negativeIndices.length} valores negativos. Los valores negativos invalidan ciertos tests estadísticos (Chow, Kn, etc.).`,
+      affected_indices: negativeIndices,
+      severity: "danger",
     });
   }
+
+  const zeroIndices = series
+    .map((value, index) => ({ value, index }))
+    .filter((item) => typeof item.value === 'number' && item.value === 0)
+    .map((item) => item.index);
+
+  if (zeroIndices.length > 0) {
+    warnings.push({
+      code: "ZERO_VALUES",
+      message: `Se encontraron ${zeroIndices.length} valores iguales a cero.`,
+      affected_indices: zeroIndices,
+      severity: "warning",
+    });
+  }
+
+  const virtualZeroIndices = series
+    .map((value, index) => ({ value, index }))
+    .filter((item) => typeof item.value === 'number' && item.value !== 0 && Math.abs(item.value) < 1e-10)
+    .map((item) => item.index);
+
+  if (virtualZeroIndices.length > 0) {
+    warnings.push({
+      code: "VIRTUALLY_ZERO_VALUES",
+      message: `Se encontraron ${virtualZeroIndices.length} valores extremadamente cercanos a cero (virtualmente cero). Estos valores pueden distorsionar los cálculos estadísticos.`,
+      affected_indices: virtualZeroIndices,
+      severity: "warning",
+    });
+  }
+
   return warnings;
 }
 
@@ -635,18 +668,70 @@ export default function App() {
   // HANDLERS DE MODIFICACIÓN DE SERIE
   // ---------------------------------------------------------------------------
 
-  /** Actualiza valor en índice específico */
-  const updateByIndex = (index, value) => {
-    const next = [...series];
-    next[index] = value;
-    setSeries(next);
+  /** Actualiza valor en índice específico (ingesta manual) */
+  const updateByIndex = (index, rawValue) => {
+    // Permitir cadena vacía mientras el usuario escribe
+    if (rawValue === "") {
+      setSeries((prev) => {
+        const next = [...prev];
+        next[index] = "";
+        return next;
+      });
+      return;
+    }
+
+    const numValue = Number(rawValue);
+    if (Number.isNaN(numValue)) return;
+
+    // Bloquear valores negativos en ingesta manual
+    if (numValue < 0) {
+      showWarning("No se permiten valores negativos en la ingesta manual.", {
+        title: "Valor inválido",
+      });
+      return;
+    }
+
+    // Bloquear valores "virtualmente cero" (extremadamente pequeños)
+    if (numValue !== 0 && Math.abs(numValue) < 1e-10) {
+      showWarning(
+        "El valor es extremadamente cercano a cero y no se considera válido para el análisis.",
+        { title: "Valor inválido" }
+      );
+      return;
+    }
+
+    setSeries((prev) => {
+      const next = [...prev];
+      next[index] = numValue;
+      return next;
+    });
+  };
+
+  /** Confirma el valor cuando el input pierde foco (convierte "" a 0) */
+  const commitValue = (index) => {
+    setSeries((prev) => {
+      const next = [...prev];
+      if (next[index] === "" || next[index] === null || next[index] === undefined) {
+        next[index] = 0;
+      }
+      return next;
+    });
   };
 
   /** Agrega fila con valor 0 al final */
   const addRow = () => setSeries((prev) => [...prev, 0]);
 
   /** Elimina fila en índice específico */
-  const removeRow = (index) => setSeries((prev) => prev.filter((_, i) => i !== index));
+  const removeRow = (index) => {
+    setSeries((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // Si se elimina la última fila, restaurar estado inicial [0, 0, 0]
+      if (next.length === 0) {
+        return [0, 0, 0];
+      }
+      return next;
+    });
+  };
 
   /** Toggle selección de distribución para ajuste de frecuencia */
   const toggleDistribution = (dist) => {
@@ -1653,7 +1738,7 @@ export default function App() {
                     <button className="btn-secondary" onClick={addRow} style={{fontSize:'12px', padding:'6px 12px'}}>
                       <i className="fas fa-plus" style={{marginRight:'4px'}}></i>Agregar fila
                     </button>
-                    <button className="btn-secondary" onClick={() => { setSeries([]); showWarning('Todos los datos fueron eliminados', 'warning'); }} style={{fontSize:'12px', padding:'6px 12px', color:'var(--danger)', borderColor:'var(--danger-border)'}}>
+                    <button className="btn-secondary" onClick={() => { setSeries([0, 0, 0]); showWarning('Los datos fueron reiniciados al estado inicial', 'warning'); }} style={{fontSize:'12px', padding:'6px 12px', color:'var(--danger)', borderColor:'var(--danger-border)'}}>
                       <i className="fas fa-trash-can" style={{marginRight:'4px'}}></i>Limpiar
                     </button>
                   </div>
@@ -1670,23 +1755,39 @@ export default function App() {
                     </thead>
                     <tbody>
                       {series.map((value, index) => {
-                        const isWarn = value <= 0;
+                        const isNumeric = typeof value === 'number';
+                        const isNegative = isNumeric && value < 0;
+                        const isZero = isNumeric && value === 0;
+                        const isVirtualZero = isNumeric && value !== 0 && Math.abs(value) < 1e-10;
+
+                        let rowClass = '';
+                        if (isNegative) rowClass = 'cell-danger cell-error';
+                        else if (isVirtualZero) rowClass = 'cell-virtual-zero cell-error';
+                        else if (isZero) rowClass = 'cell-zero cell-error';
+
+                        let cellClass = '';
+                        let inputClass = '';
+                        if (isNegative) { cellClass = 'danger-cell'; inputClass = 'danger'; }
+                        else if (isVirtualZero) { cellClass = 'virtual-zero-cell'; inputClass = 'virtual-zero'; }
+                        else if (isZero) { cellClass = 'warn-cell'; inputClass = 'warn'; }
+
                         return (
                           <tr
                             key={`row-${index}`}
-                            className={isWarn ? "cell-error" : ""}
+                            className={rowClass}
                             style={{animation: `fadeUp 0.3s ease ${index * 0.02}s both`}}
                           >
                             <td style={{color:'var(--fg-muted)', fontSize:'12px'}}>{index + 1}</td>
                             {dates.length > 0 && <td style={{fontSize:'0.85em', color:'var(--fg-muted)'}}>{dates[index] || '-'}</td>}
-                            <td className={isWarn ? 'warn-cell' : ''}>
+                            <td className={cellClass}>
                               <input
                                 type="number"
                                 step="any"
-                                value={displayValue(value)}
-                                className={isWarn ? 'warn' : ''}
+                                value={value === "" ? "" : (typeof value === 'number' ? value : 0)}
+                                className={inputClass}
                                 data-index={index}
-                                onChange={(e) => updateByIndex(index, Number(e.target.value))}
+                                onChange={(e) => updateByIndex(index, e.target.value)}
+                                onBlur={() => commitValue(index)}
                               />
                             </td>
                             <td>
@@ -1702,7 +1803,10 @@ export default function App() {
                 </div>
                 <p style={{fontSize:'11.5px', color:'var(--fg-muted)', margin:'12px 0 0', display:'flex', alignItems:'center', gap:'6px'}}>
                   <i className="fas fa-circle-info" style={{fontSize:'10px'}}></i>
-                  Las celdas con valores cero o negativos se resaltan y se consideran advertencias en el análisis.
+                  <span style={{color:'var(--danger)'}}>🔴 Negativos</span> — 
+                  <span style={{color:'var(--warning)'}}>🟡 Cero</span> — 
+                  <span style={{color:'#ff8c42'}}>🟠 Virtualmente cero</span>.
+                  Estos valores se consideran advertencias en el análisis.
                 </p>
               </div>
             </section>

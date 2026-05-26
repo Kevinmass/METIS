@@ -76,7 +76,7 @@ def test_ui_ingesta_manual(page: Page):
     # Verificar advertencias
     expect(page.locator(".status-banner.warning")).to_be_visible()
     expect(
-        page.locator("text=Se encontraron 3 valores negativos o cero.")
+        page.locator("text=Se encontraron 3 valores iguales a cero.")
     ).to_be_visible()
 
 

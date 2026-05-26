@@ -11,7 +11,20 @@ class TestFrequencyFitEndpoint:
     def test_frequency_fit_valid_series(self, client):
         """Test de ajuste de distribuciones con serie válida."""
         request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0, 115.0, 98.0, 102.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MOM",
         }
 
@@ -21,7 +34,7 @@ class TestFrequencyFitEndpoint:
         data = response.json()
 
         assert "n" in data
-        assert data["n"] == 8
+        assert data["n"] == 12
         assert "estimation_method" in data
         assert data["estimation_method"] == "MOM"
         assert "distributions" in data
@@ -31,7 +44,20 @@ class TestFrequencyFitEndpoint:
     def test_frequency_fit_specific_distributions(self, client):
         """Test de ajuste de distribuciones específicas."""
         request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MOM",
             "distribution_names": ["Normal", "Gumbel"],
         }
@@ -55,7 +81,7 @@ class TestFrequencyFitEndpoint:
         response = client.post("/frequency/fit", json=request)
 
         assert response.status_code == 400
-        assert "at least" in response.json()["detail"].lower()
+        assert "al menos" in response.json()["detail"].lower()
 
     def test_frequency_fit_too_short(self, client):
         """Test de ajuste con serie demasiado corta."""
@@ -67,7 +93,7 @@ class TestFrequencyFitEndpoint:
         response = client.post("/frequency/fit", json=request)
 
         assert response.status_code == 400
-        assert "at least" in response.json()["detail"].lower()
+        assert "al menos" in response.json()["detail"].lower()
 
     def test_frequency_fit_with_nan(self, client):
         """Test de ajuste con valores NaN."""
@@ -84,7 +110,20 @@ class TestFrequencyFitEndpoint:
     def test_frequency_fit_distribution_schema(self, client):
         """Test de que cada distribución tiene el schema correcto."""
         request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MOM",
         }
 
@@ -114,7 +153,20 @@ class TestFrequencyFitEndpoint:
     def test_frequency_fit_mle_method(self, client):
         """Test de ajuste con método MLE."""
         request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MLE",
         }
 
@@ -128,7 +180,20 @@ class TestFrequencyFitEndpoint:
     def test_frequency_fit_mentropy_method(self, client):
         """Test de ajuste con método MEnt."""
         request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MEnt",
         }
 
@@ -269,7 +334,20 @@ class TestAPIIntegration:
         """Test de flujo completo: ajuste y luego evento de diseño."""
         # 1. Ajustar distribuciones
         fit_request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0, 115.0, 98.0, 102.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MOM",
         }
 
@@ -299,7 +377,20 @@ class TestAPIIntegration:
         """Test de cálculo de múltiples eventos de diseño."""
         # Primero ajustar
         fit_request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MOM",
         }
 
@@ -372,7 +463,20 @@ class TestAPIResponseFormat:
     def test_fit_response_json_serializable(self, client):
         """Test de que la respuesta es JSON serializable."""
         request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MOM",
         }
 
@@ -400,7 +504,20 @@ class TestAPIResponseFormat:
     def test_content_type_header(self, client):
         """Test de que la API retorna Content-Type correcto."""
         request = {
-            "series": [100.0, 120.0, 95.0, 110.0, 105.0],
+            "series": [
+                100.0,
+                120.0,
+                95.0,
+                110.0,
+                105.0,
+                115.0,
+                98.0,
+                102.0,
+                108.0,
+                112.0,
+                96.0,
+                103.0,
+            ],
             "estimation_method": "MOM",
         }
 

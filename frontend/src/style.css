@@ -952,6 +952,27 @@ select.form-input {
   color: var(--warning) !important;
 }
 
+.cell-danger {
+  background: var(--danger-bg) !important;
+}
+.cell-danger input {
+  color: var(--danger) !important;
+}
+
+.cell-virtual-zero {
+  background: rgba(245, 199, 107, 0.25) !important;
+  border-left: 3px solid #ff8c42 !important;
+}
+.cell-virtual-zero input {
+  color: #ff8c42 !important;
+}
+
+.cell-zero {
+  background: var(--warning-bg) !important;
+}
+.cell-zero input {
+  color: var(--warning) !important;
+}
 .accordion {
   border-top: 1px solid var(--border);
 }

@@ -92,10 +92,23 @@ def _test_result_to_schema(result) -> TestResultSchema:
     response_model=SamhiaAnalysisResponse,
     summary="Análisis estadístico completo SAMHIA",
     description=(
-        "Ejecuta el pipeline completo de análisis estadístico SAMHIA sobre una "
-        "serie temporal. Ahora respeta la frecuencia temporal proporcionada: "
-        "los valores críticos y lags se escalan según si los datos son "
-        "anuales, mensuales, diarios, etc."
+        "**Ejecuta el pipeline completo de análisis estadístico SAMHIA** "
+        "sobre una serie temporal con fechas.\n\n"
+        "Incluye:\n"
+        "- **Estadísticas descriptivas**: media, mediana, "
+        "cuartiles, asimetría, curtosis\n"
+        "- **Independencia**: Anderson, Wald-Wolfowitz, "
+        "Durbin-Watson, Ljung-Box, Spearman\n"
+        "- **Homogeneidad**: Helmert, t-Student, "
+        "Cramer, Mann-Whitney, Mood\n"
+        "- **Tendencia**: Mann-Kendall (con corrección Modified MK), "
+        "Kolmogorov-Smirnov\n"
+        "- **Outliers**: Chow, Kn\n\n"
+        "Respeta la frecuencia temporal: los valores críticos y lags se escalan "
+        "según si los datos son anuales, mensuales, diarios, etc."
+    ),
+    response_description=(
+        "Resultado completo del análisis SAMHIA " "con todos los grupos de pruebas"
     ),
 )
 async def analyze_samhia(request: SamhiaAnalysisRequest):
@@ -226,7 +239,16 @@ async def analyze_samhia(request: SamhiaAnalysisRequest):
     "/pdf",
     response_model=PDFGenerationResponse,
     summary="Generar reporte PDF",
-    description="Genera un reporte PDF completo de 10 páginas con análisis SAMHIA.",
+    description=(
+        "Genera un reporte PDF profesional de 10+ páginas con el análisis "
+        "completo SAMHIA, incluyendo:\n\n"
+        "- Portada con metadatos (embalse, autor, institución)\n"
+        "- Estadísticas descriptivas (media, mediana, asimetría, etc.)\n"
+        "- Resultados de pruebas de independencia, homogeneidad, tendencia y outliers\n"
+        "- Gráficos de serie temporal y correlograma\n"
+        "- Formato profesional apto para informes técnicos y entregables docentes"
+    ),
+    response_description="Ruta del archivo PDF generado",
 )
 async def generate_pdf(request: PDFGenerationRequest):
     """Genera reporte PDF y devuelve la ruta del archivo."""
@@ -281,7 +303,11 @@ async def generate_pdf(request: PDFGenerationRequest):
 @router.get(
     "/download/{filename}",
     summary="Descargar PDF generado",
-    description="Descarga un PDF previamente generado.",
+    description=(
+        "Descarga un PDF previamente generado. "
+        "Retorna el archivo PDF como respuesta binaria."
+    ),
+    response_description="Archivo PDF listo para descarga",
 )
 async def download_pdf(filename: str):
     """Descarga un PDF generado."""
@@ -348,8 +374,15 @@ def _process_single_variable(
     summary="Procesamiento batch de archivos",
     description=(
         "Procesa múltiples archivos CSV/Excel y genera reportes PDF para cada "
-        "variable."
+        "variable. Ideal para procesar grandes volúmenes de datos hidrológicos "
+        "de forma automatizada.\n\n"
+        "Para cada archivo:\n"
+        "1. Lee y detecta columnas numéricas disponibles\n"
+        "2. Procesa cada variable individualmente\n"
+        "3. Genera un reporte PDF por variable\n"
+        "4. Reporta estadísticas de éxito/fallo por archivo"
     ),
+    response_description="Resumen del procesamiento batch con resultados por archivo",
 )
 async def process_batch(request: BatchFileRequest):
     """Procesa múltiples archivos en batch."""
@@ -446,7 +479,15 @@ async def process_batch(request: BatchFileRequest):
 @router.post(
     "/upload",
     summary="Subir archivo para análisis",
-    description="Sube un archivo CSV/Excel para análisis individual.",
+    description=(
+        "Sube un archivo CSV/Excel para análisis individual. "
+        "Detecta automáticamente las columnas numéricas y variables disponibles, "
+        "retornando metadatos sobre el contenido del archivo. "
+        "Utilice el endpoint /reports/analyze para procesar una variable específica."
+    ),
+    response_description=(
+        "Metadatos del archivo: nombre, " "variables detectadas y cantidad de filas"
+    ),
 )
 async def upload_file(
     file: UploadFile = File(...),  # noqa: B008
@@ -516,8 +557,17 @@ async def upload_file(
     response_model=OutlierPlotResponse,
     summary="Generar gráficos de análisis de outliers",
     description=(
-        "Genera los 4 gráficos para análisis de outliers: Control Chart, "
-        "Probability Plot, Q-Q Plot y Función de Densidad de Probabilidad (FDP)."
+        "**Genera los 4 gráficos para análisis de outliers:**\n\n"
+        "1. **Control Chart**: Serie temporal con "
+        "umbrales Kn (límite inferior/superior)\n"
+        "2. **Probability Plot**: Gráfico de probabilidad en escala logarítmica\n"
+        "3. **Q-Q Plot**: Cuantiles teóricos vs observados\n"
+        "4. **FDP**: Función de Densidad de Probabilidad con outliers resaltados\n\n"
+        "Los gráficos se retornan como imágenes base64 embebidas en JSON.\n"
+        "Métodos utilizados: Kn (distancia escalada) y Chow (residuos studentizados)."
+    ),
+    response_description=(
+        "Gráficos generados (base64) con límites Kn e índices de outliers detectados"
     ),
 )
 async def generate_outlier_plots(  # noqa: PLR0915

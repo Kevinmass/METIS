@@ -31,7 +31,10 @@ def test_validate_response_contains_required_schema_fields(client):
 
     Esta estructura es el contrato base que consume el frontend.
     """
-    response = client.post("/validate", json={"series": [1.0, 2.0, 3.0, 4.0, 5.0]})
+    response = client.post(
+        "/validate",
+        json={"series": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]},
+    )
 
     assert response.status_code == HTTP_OK
     payload = response.json()
@@ -57,7 +60,10 @@ def test_each_test_result_contains_required_fields(client):
 
     Esto asegura que todos los grupos retornan información completa.
     """
-    response = client.post("/validate", json={"series": [1.0, 2.0, 3.0, 4.0, 5.0]})
+    response = client.post(
+        "/validate",
+        json={"series": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]},
+    )
 
     assert response.status_code == HTTP_OK
     validation = response.json()["validation"]

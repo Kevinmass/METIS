@@ -69,6 +69,88 @@ class CustomJSONResponse(JSONResponse):
         ).encode("utf-8")
 
 
+# Metadata descriptiva para los tags de la documentación OpenAPI.
+# Cada grupo define un bloque navegable en Swagger UI / ReDoc.
+openapi_tags = [
+    {
+        "name": "health",
+        "description": (
+            "Verificación de estado del servicio. "
+            "Utilizado por sistemas de monitoreo y orquestación "
+            "para confirmar que la API está operativa."
+        ),
+    },
+    {
+        "name": "validate",
+        "description": (
+            "**Validación hidrológica** — Ejecuta el pipeline completo de pruebas "
+            "estadísticas sobre series de caudales u otras variables hidrológicas.\n\n"
+            "Incluye:\n"
+            "- **Independencia**: Anderson (principal) + "
+            "Wald-Wolfowitz (verificación)\n"
+            "- **Homogeneidad**: Helmert, t-Student, "
+            "Cramer (sin veredicto agregado)\n"
+            "- **Tendencia**: Mann-Kendall (con corrección Modified MK) + "
+            "Kolmogorov-Smirnov\n"
+            "- **Atípicos**: Chow (residuos studentizados) + "
+            "Kn (distancia escalada)\n\n"
+            "Dos vías de ingesta:\n"
+            "- `POST /validate`: JSON directo con la serie numérica\n"
+            "- `POST /validate/file`: Archivo CSV o Excel para subida masiva"
+        ),
+        "externalDocs": {
+            "description": "Ver contrato de API (schema_api.md)",
+            "url": "https://github.com/Kevinmass/-/blob/main/docs/schema_api.md",
+        },
+    },
+    {
+        "name": "frequency",
+        "description": (
+            "**Análisis de frecuencia** — Ajuste de distribuciones de "
+            "probabilidad y cálculo de eventos de diseño para "
+            "dimensionamiento de obras hidráulicas.\n\n"
+            "Endpoints:\n"
+            "- `POST /frequency/fit`: Ajusta distribuciones a una serie hidrológica\n"
+            "- `POST /frequency/design-event`: Calcula evento de diseño "
+            "para un período de retorno\n\n"
+            "Distribuciones soportadas: Gumbel, Log-Normal, Log-Pearson III, GEV, "
+            "y otras 9 del dominio hidrológico.\n"
+            "Métodos de estimación: MOM, MLE, MEnt, LMom."
+        ),
+    },
+    {
+        "name": "reports",
+        "description": (
+            "**Reportes SAMHIA** — Análisis estadístico completo, gráficos, "
+            "generación de PDFs profesionales y procesamiento batch.\n\n"
+            "Endpoints:\n"
+            "- `POST /reports/analyze`: Análisis SAMHIA completo "
+            "con estadísticas descriptivas\n"
+            "- `POST /reports/pdf`: Genera reporte PDF de 10+ páginas\n"
+            "- `GET /reports/download/{filename}`: Descarga PDF generado\n"
+            "- `POST /reports/batch`: Procesamiento batch de múltiples archivos\n"
+            "- `POST /reports/upload`: Subida y detección de variables\n"
+            "- `POST /reports/plots/outliers`: Genera gráficos de análisis de outliers"
+        ),
+    },
+    {
+        "name": "temporal",
+        "description": (
+            "**Agregación temporal** — Detección de frecuencia y agregación "
+            "de series temporales a resoluciones superiores.\n\n"
+            "Soporta agregación ascendente:\n"
+            "- Minutos (5min) → Horaria → Diaria → Mensual → Anual\n"
+            "- Año hidrológico configurable (default: octubre)\n"
+            "- Período diario personalizado (ej: 09:00 a 09:00)\n\n"
+            "Endpoints:\n"
+            "- `POST /temporal/aggregate`: Agrega serie a la frecuencia objetivo\n"
+            "- `POST /temporal/detect-frequency`: Detecta la frecuencia temporal\n"
+            "- `POST /temporal/available-targets`: "
+            "Lista frecuencias objetivo disponibles"
+        ),
+    },
+]
+
 # Configuración de la aplicación FastAPI
 app = FastAPI(
     title="METIS API",
@@ -87,6 +169,15 @@ app = FastAPI(
     },
     license_info={
         "name": "Proyecto Académico - UCC",
+    },
+    openapi_tags=openapi_tags,
+    swagger_ui_parameters={
+        "displayRequestDuration": True,
+        "filter": True,
+        "tryItOutEnabled": True,
+        "syntaxHighlight": {"theme": "monokai"},
+        "persistAuthorization": True,
+        "docExpansion": "list",
     },
     default_response_class=CustomJSONResponse,
 )
@@ -122,6 +213,7 @@ app.include_router(temporal.router)
     summary="Health Check",
     description="Verifica que el servicio esté operativo y retorna info de versión.",
     response_description="Servicio operativo con estado 'ok'",
+    tags=["health"],
 )
 async def health_check() -> dict:
     """Endpoint de verificación de salud del servicio.

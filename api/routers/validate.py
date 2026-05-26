@@ -53,7 +53,7 @@ from core.validation import run_validation_pipeline
 router = APIRouter()
 
 # Constantes de validación
-MIN_SERIES_LENGTH = 3
+MIN_SERIES_LENGTH = 10
 
 
 def unsupported_file_type() -> None:
@@ -88,7 +88,7 @@ def short_series_error() -> None:
     """
     raise HTTPException(
         status_code=400,
-        detail="La serie debe contener al menos 3 datos",
+        detail=f"La serie debe contener al menos {MIN_SERIES_LENGTH} datos",
     )
 
 

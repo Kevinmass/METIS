@@ -53,7 +53,7 @@ from core.shared.types import DesignEvent, FitResult, GoodnessOfFit
 router = APIRouter()
 
 # Constantes de validación
-MIN_SERIES_LENGTH = 3
+MIN_SERIES_LENGTH = 10
 
 
 def sanitize_float(value: float) -> float:
@@ -218,8 +218,8 @@ def fit_distributions(request: FrequencyFitRequest) -> FrequencyFitResponse:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Series must have at least {MIN_SERIES_LENGTH} observations, "
-                f"got {len(request.series)}"
+                f"La serie debe tener al menos {MIN_SERIES_LENGTH} datos, "
+                f"actualmente tiene {len(request.series)}"
             ),
         )
 
@@ -239,8 +239,8 @@ def fit_distributions(request: FrequencyFitRequest) -> FrequencyFitResponse:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Series must have at least {MIN_SERIES_LENGTH} valid observations "
-                f"after removing NaN, got {len(series)}"
+                f"La serie debe tener al menos {MIN_SERIES_LENGTH} datos válidos "
+                f"después de eliminar NaN, got {len(series)}"
             ),
         )
 

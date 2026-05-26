@@ -208,10 +208,13 @@ def test_validate_series_with_zero_returns_warning_and_analysis(client):
 
     Esto demuestra el principio "detectar y advertir, nunca bloquear".
     """
-    response = client.post("/validate", json={"series": [4.0, 2.0, 0.0, 3.0, 5.0]})
+    response = client.post(
+        "/validate",
+        json={"series": [4.0, 2.0, 0.0, 3.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]},
+    )
 
     assert response.status_code == HTTP_OK
-    assert response.json()["n"] == EXPECTED_WARNING_SERIES_SIZE
+    assert response.json()["n"] == 10
     warning_codes = {warning["code"] for warning in response.json()["warnings"]}
     assert "ZERO_VALUES" in warning_codes
     assert "validation" in response.json()
