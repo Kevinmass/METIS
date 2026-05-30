@@ -1,0 +1,2 @@
+PS C:\Users\kevin\OneDrive\Desktop\Clases\Proyecto Integrador\METIS> ruff check --fix
+All checks passed!

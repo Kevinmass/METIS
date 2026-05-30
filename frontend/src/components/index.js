@@ -11,3 +11,5 @@ export { AquaButton } from './AquaButton.jsx';
 export { default as AsymmetricDistributionsChart } from './AsymmetricDistributionsChart.jsx';
 export { default as FrequencyTheoryInfo } from './FrequencyTheoryInfo.jsx';
 export { ToastContainer } from './Toast.jsx';
+export { default as TeacherNote } from './TeacherNote.jsx';
+export { default as TeacherTooltip } from './TeacherTooltip.jsx';

@@ -590,6 +590,71 @@ Todos los jobs del pipeline CI pasan en verde. La validación cruzada contra la 
 
 ---
 
+## 🎓 Etapa 6 — Modo Docente y Visualización Didáctica
+
+*Objetivo: Agregar una capa de explicaciones teóricas activables para acercar la funcionalidad del sistema a usuarios no expertos en estadística.*
+
+### 6.1 Arquitectura del Modo Docente
+
+- [x] `TeacherModeContext`: Context global React para estado del modo docente.
+- [x] Toggle en sidebar footer con indicador visual (dot azul activo/inactivo).
+- [x] `TeacherNote`: Componente reutilizable con 3 variantes (concepto, explicación, advertencia).
+- [x] `TeacherTooltip`: Tooltip flotante al hacer hover sobre elementos.
+
+### 6.2 Contenido Teórico por Sección
+
+#### Ingesta de Datos
+- [x] "¿Qué es una serie hidrológica?" — Concepto de registro temporal de mediciones.
+- [x] "¿Por qué mínimo 3 datos?" — La varianza requiere al menos 3 valores.
+- [x] "Formatos de archivo" — CSV y XLSX.
+- [x] "Procesamiento temporal" — Agregación y año hidrológico.
+
+#### Resumen de la Serie
+- [x] "Estadísticas descriptivas" — Media, desviación estándar, CV.
+- [x] "Dispersión temporal" — Tendencias visuales, valores atípicos.
+- [x] "Correlograma y autocorrelación" — Banda de confianza 95%.
+
+#### Análisis SAMHIA
+- [x] "¿Qué es SAMHIA?" — Propósito del sistema.
+- [x] "¿Por qué mínimo 12 datos?" — Potencia estadística.
+- [x] "Nivel de significancia (α)" — Error Tipo I.
+- [x] "Categorías de análisis" — Introducción a los 4 grupos de tests.
+- [x] Tooltips para 14 tests individuales con explicación al hover.
+
+#### Análisis de Frecuencia
+- [x] "¿Qué es el análisis de frecuencia?" — Predicción de eventos extremos.
+- [x] "Métodos de estimación" — MOM, MLE, MEnt, LMom.
+- [x] "¿Por qué L-Momentos?" — Robustez ante outliers.
+- [x] "Bondad de ajuste" — Chi², KS, EEA.
+- [x] "Evento de diseño y período de retorno" — Probabilidad anual.
+- [x] "¿Por qué mínimo 3 datos?" — Suficientes para estimar parámetros.
+
+### 6.3 Gráficos de Distribuciones (SVG nativo)
+
+- [x] `DistributionPDFChart`: Curva PDF individual de cada distribución + histograma real superpuesto.
+- [x] `SuperimposedDistributionsChart`: Todas las distribuciones ajustadas superpuestas con toggle show/hide.
+- [x] Sin dependencia de backend: cálculo de PDF 100% en JavaScript (reutiliza matemática de `AsymmetricDistributionsChart`).
+- [x] Integración en accordion de cada distribución (Modo Docente).
+- [x] Gráfico comparativo después del ranking de distribuciones (Modo Docente).
+
+### 6.4 Scripts de Automatización
+
+- [x] `run_tests.sh`: Script Bash para ejecutar la suite completa.
+- [x] `run_tests.bat`: Script Batch para Windows con la misma funcionalidad.
+- [x] Logs redirigidos a `UnitTestLog.txt`, `RuffLog.txt`, `BlackLog.txt`, `IntegrationTestLog.txt`, `E2ETestLog.txt`.
+
+---
+
+### ✅ Tests — Etapa 6
+
+> No se requieren tests adicionales para el Modo Docente ya que los componentes son puramente visuales y condicionales (solo se renderizan cuando `teacherMode === true`). La funcionalidad existente no se ve afectada.
+
+### Criterio de cierre — Etapa 6
+
+El sistema muestra explicaciones teóricas en las 4 secciones al activar el toggle. Los tooltips aparecen al hacer hover sobre tests en SAMHIA. Los gráficos de distribución se renderizan correctamente mostrando curvas PDF y histogramas. Todo esto sin afectar la funcionalidad existente.
+
+---
+
 ## 📊 Resumen de cobertura de tests por etapa
 
 | Etapa | Tipo de tests | Qué valida |

@@ -26,6 +26,16 @@ import { OutliersPanel } from "./Samhia.jsx";
 import { WaterChartBox, GlassPanel, AquaButton, ToastContainer } from "./components";
 import { AquaLineChart, AquaBarChart, AquaAreaChart, AquaScatterChart } from "./components/charts";
 
+// Modo Docente
+import { useTeacherMode } from "./context/TeacherModeContext";
+import IngestaTeacherNotes from "./components/teacher/IngestaTeacherNotes";
+import ResumenTeacherNotes from "./components/teacher/ResumenTeacherNotes";
+import SamhiaTeacherNotes, { CATEGORY_TOOLTIPS, TEST_TOOLTIPS } from "./components/teacher/SamhiaTeacherNotes";
+import FrecuenciaTeacherNotes from "./components/teacher/FrecuenciaTeacherNotes";
+import DistributionPDFChart from "./components/DistributionPDFChart";
+import SuperimposedDistributionsChart from "./components/SuperimposedDistributionsChart";
+import TeacherTooltip from "./components/TeacherTooltip";
+
 // Hook de notificaciones toast (Epic 4)
 import { useToast } from "./hooks/useToast.jsx";
 
@@ -565,6 +575,12 @@ export default function App() {
   // ---------------------------------------------------------------------------
 
   const { toasts, removeToast, showSuccess, showError, showWarning, showInfo } = useToast();
+
+  // ---------------------------------------------------------------------------
+  // MODO DOCENTE
+  // ---------------------------------------------------------------------------
+
+  const { teacherMode, toggleTeacherMode } = useTeacherMode();
 
   // ---------------------------------------------------------------------------
   // ESTADO GLOBAL - DATOS COMPARTIDOS
@@ -1382,10 +1398,14 @@ export default function App() {
           </nav>
 
           <div className="sidebar-footer">
-            <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-              <div className="status-dot"></div>
-              <span style={{fontSize:'12px', color:'var(--fg-muted)'}}>Sistema activo</span>
-            </div>
+            <button
+              className={`teacher-mode-toggle ${teacherMode ? 'active' : ''}`}
+              onClick={toggleTeacherMode}
+              title={teacherMode ? "Desactivar Modo Docente" : "Activar Modo Docente"}
+            >
+              <span className="toggle-dot"></span>
+              <span>🎓 Modo Docente</span>
+            </button>
             <div style={{fontSize:'10px', color:'var(--border)', marginTop:'6px'}}>v2.0 — SAMHIA_EST.R</div>
           </div>
         </aside>
@@ -1429,6 +1449,8 @@ export default function App() {
                 <h2 className="font-display" style={{fontSize:'26px', fontWeight:'700', margin:'0 0 8px', letterSpacing:'-0.02em'}}>Ingesta de datos</h2>
                 <p style={{color:'var(--fg-muted)', fontSize:'14.5px', maxWidth:'600px', lineHeight:'1.6'}}>Carga tu serie hidrológica desde un archivo CSV o ingresa los valores manualmente. Los datos se almacenarán para todos los módulos de análisis.</p>
               </div>
+
+              <IngestaTeacherNotes />
 
               {/* Dropzone */}
               {(importStep === "upload" || importStep === "done") && (
@@ -1818,6 +1840,8 @@ export default function App() {
                 <p style={{color:'var(--fg-muted)', fontSize:'14.5px', maxWidth:'600px', lineHeight:'1.6'}}>Estadísticas descriptivas y gráficos exploratorios de la serie cargada.</p>
               </div>
 
+              <ResumenTeacherNotes />
+
               {/* No Data State */}
               {getValidData().length === 0 && (
                 <div className="card" style={{textAlign:'center', padding:'60px 24px'}}>
@@ -1958,6 +1982,8 @@ export default function App() {
                 <p style={{color:'var(--fg-muted)', fontSize:'14.5px', maxWidth:'660px', lineHeight:'1.6'}}>Análisis estadístico completo basado en SAMHIA_EST.R con tests detallados y generación de reportes PDF de 10 páginas.</p>
               </div>
 
+              <SamhiaTeacherNotes />
+
               <div className="grid-2col">
                 <div className="card">
                   <h3 className="font-display" style={{fontSize:'15px', fontWeight:'600', margin:'0 0 20px'}}>Configuración del reporte</h3>
@@ -2050,21 +2076,22 @@ export default function App() {
                     {/* Tabs */}
                     <div style={{display:'flex', gap:'8px', marginBottom:'16px', flexWrap:'wrap'}}>
                       {["analysis", "independence", "homogeneity", "trend", "outliers"].map((tab) => (
-                        <button
-                          key={tab}
-                          className={`btn-secondary ${activeSamhiaTab === tab ? 'selected-tab' : ''}`}
-                          onClick={() => setActiveSamhiaTab(tab)}
-                          style={{
-                            padding:'8px 16px', fontSize:'0.9rem',
-                            ...(activeSamhiaTab === tab ? {background:'var(--accent-light)', color:'var(--accent)', borderColor:'var(--accent)'} : {})
-                          }}
-                        >
-                          {tab === "analysis" && "Estadísticas"}
-                          {tab === "independence" && "Independencia"}
-                          {tab === "homogeneity" && "Homogeneidad"}
-                          {tab === "trend" && "Tendencia"}
-                          {tab === "outliers" && "Atípicos"}
-                        </button>
+                        <TeacherTooltip key={tab} content={tab !== "analysis" && CATEGORY_TOOLTIPS[tab] ? CATEGORY_TOOLTIPS[tab] : undefined} position="bottom">
+                          <button
+                            className={`btn-secondary ${activeSamhiaTab === tab ? 'selected-tab' : ''}`}
+                            onClick={() => setActiveSamhiaTab(tab)}
+                            style={{
+                              padding:'8px 16px', fontSize:'0.9rem',
+                              ...(activeSamhiaTab === tab ? {background:'var(--accent-light)', color:'var(--accent)', borderColor:'var(--accent)'} : {})
+                            }}
+                          >
+                            {tab === "analysis" && "Estadísticas"}
+                            {tab === "independence" && "Independencia"}
+                            {tab === "homogeneity" && "Homogeneidad"}
+                            {tab === "trend" && "Tendencia"}
+                            {tab === "outliers" && "Atípicos"}
+                          </button>
+                        </TeacherTooltip>
                       ))}
                     </div>
 
@@ -2107,6 +2134,8 @@ export default function App() {
                 <h2 className="font-display" style={{fontSize:'26px', fontWeight:'700', margin:'0 0 8px', letterSpacing:'-0.02em'}}>Análisis de Frecuencia</h2>
                 <p style={{color:'var(--fg-muted)', fontSize:'14.5px', maxWidth:'640px', lineHeight:'1.6'}}>Ajusta distribuciones de probabilidad a tu serie y calcula eventos de diseño.</p>
               </div>
+
+              <FrecuenciaTeacherNotes />
 
               {getValidData().length === 0 && (
                 <div className="card" style={{textAlign:'center', padding:'60px 24px'}}>
@@ -2185,10 +2214,21 @@ export default function App() {
                               distribution={dist}
                               isSelected={selectedDistribution?.distribution_name === dist.distribution_name}
                               onSelect={() => setSelectedDistribution(dist)}
+                              seriesData={getValidData()}
                             />
                           ))}
                         </div>
                       </div>
+
+                      {/* Superimposed Chart - Teacher Mode */}
+                      {teacherMode && fitResults.distributions.length > 1 && (
+                        <div className="card" style={{marginBottom:'20px'}}>
+                          <SuperimposedDistributionsChart
+                            distributions={fitResults.distributions}
+                            seriesData={getValidData()}
+                          />
+                        </div>
+                      )}
 
                       {/* Design Event */}
                       {selectedDistribution && (
@@ -2327,8 +2367,9 @@ function Correlogram({ data, band }) {
 // SUBCOMPONENTES - ANÁLISIS DE FRECUENCIA
 // =============================================================================
 
-function DistributionResult({ distribution, isSelected, onSelect }) {
+function DistributionResult({ distribution, isSelected, onSelect, seriesData }) {
   const [open, setOpen] = useState(false);
+  const { teacherMode } = useTeacherMode();
 
   return (
     <div className="accordion-item">
@@ -2352,6 +2393,16 @@ function DistributionResult({ distribution, isSelected, onSelect }) {
               {isSelected ? "Seleccionada" : "Seleccionar para evento de diseño"}
             </button>
           </div>
+
+          {/* Gráfico PDF individual - solo en Modo Docente */}
+          {teacherMode && seriesData && seriesData.length > 0 && (
+            <DistributionPDFChart
+              distributionName={distribution.distribution_name}
+              parameters={distribution.parameters}
+              seriesData={seriesData}
+              color={distribution.is_recommended ? '#34d399' : '#60a5fa'}
+            />
+          )}
 
           <div style={{marginBottom:'16px'}}>
             <h4>Parámetros</h4>

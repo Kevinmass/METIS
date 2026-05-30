@@ -19,6 +19,7 @@
 
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { TeacherModeProvider } from "./context/TeacherModeContext";
 import App from "./App";
 
 // Sistema de Diseño Frutiger Aero - Estilos Globales
@@ -38,6 +39,8 @@ const root = createRoot(container);
 // Renderizar aplicación con StrictMode
 root.render(
   <React.StrictMode>
-    <App />
+    <TeacherModeProvider>
+      <App />
+    </TeacherModeProvider>
   </React.StrictMode>
 );
