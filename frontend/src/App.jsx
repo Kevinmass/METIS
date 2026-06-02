@@ -768,8 +768,9 @@ export default function App() {
     setFitResults(null);
     setDesignEvent(null);
 
-    if (series.length < 3) {
-      const msg = "La serie debe tener al menos 3 valores numéricos.";
+    const validForFreq = series.filter((v) => Number.isFinite(v) && v > 0);
+    if (validForFreq.length < 12) {
+      const msg = "Se requieren al menos 12 datos válidos para el análisis de frecuencia.";
       setFitError(msg);
       showWarning(msg, { title: "Datos insuficientes" });
       return;
@@ -781,7 +782,7 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          series,
+          series: validForFreq,
           estimation_method: estimationMethod,
           distribution_names: selectedDistributions,
         }),
@@ -882,9 +883,9 @@ export default function App() {
     setAnalysisError("");
     setAnalysisResults(null);
 
-    const validData = series.filter((v) => Number.isFinite(v));
+    const validData = series.filter((v) => Number.isFinite(v) && v > 0);
     if (validData.length < 12) {
-      const msg = "La serie debe tener al menos 12 datos válidos para el análisis SAMHIA.";
+      const msg = "Se requieren al menos 12 datos válidos para el análisis SAMHIA completo.";
       setAnalysisError(msg);
       showWarning(msg, { title: "Datos insuficientes" });
       return;
@@ -2041,7 +2042,7 @@ export default function App() {
               <div style={{marginTop:'20px'}}>
                 <div className="card" style={{marginBottom:'20px'}}>
                   <div className="button-group">
-                    <button className="btn-primary" onClick={handleAnalyzeSamhia} disabled={isAnalyzing || series.length < 12}>
+                    <button className="btn-primary" onClick={handleAnalyzeSamhia} disabled={isAnalyzing || getValidData().filter(v => v > 0).length < 12}>
                       {isAnalyzing ? "Analizando..." : "Ejecutar análisis SAMHIA"}
                     </button>
                     {pdfPath && (

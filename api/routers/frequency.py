@@ -54,6 +54,7 @@ router = APIRouter()
 
 # Constantes de validación
 MIN_SERIES_LENGTH = 10
+MIN_VALID_DATA = 12
 
 
 def sanitize_float(value: float) -> float:
@@ -244,7 +245,20 @@ def fit_distributions(request: FrequencyFitRequest) -> FrequencyFitResponse:
             ),
         )
 
-    # Ajustar distribuciones
+    # Filtrar valores no positivos (negativos y cero invalidan distribuciones
+    # como Log-Normal, Log-Pearson III, etc.)
+    valid_series = series[series > 0]
+    if len(valid_series) < MIN_VALID_DATA:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"La serie debe tener al menos {MIN_VALID_DATA} datos válidos. "
+                f"Datos válidos: {len(valid_series)}"
+            ),
+        )
+
+    # Ajustar distribuciones usando solo datos válidos (> 0)
+    series = valid_series
     try:
         fit_results = fit_all_distributions(
             series=series,

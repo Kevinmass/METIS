@@ -132,10 +132,7 @@ async def analyze_samhia(request: SamhiaAnalysisRequest):
         ].copy()
 
     if len(df) < 12:  # noqa: PLR2004
-        msg = (
-            f"La serie debe tener al menos 12 datos con fechas válidas. "
-            f"Datos válidos: {len(df)}"
-        )
+        msg = "Se requieren al menos 12 datos válidos para el análisis SAMHIA completo."
         raise HTTPException(status_code=400, detail=msg)
 
     df = df.sort_values("date").reset_index(drop=True)
@@ -143,7 +140,7 @@ async def analyze_samhia(request: SamhiaAnalysisRequest):
     series = pd.Series(df[request.series_name].dropna().to_numpy())
 
     if len(series) < 12:  # noqa: PLR2004
-        msg = "La serie debe tener al menos 12 datos válidos"
+        msg = "Se requieren al menos 12 datos válidos para el análisis SAMHIA completo."
         raise HTTPException(status_code=400, detail=msg)
 
     # Ejecutar tests CON frecuencia temporal
@@ -268,10 +265,7 @@ async def generate_pdf(request: PDFGenerationRequest):
         ].copy()
 
     if len(df) < 12:  # noqa: PLR2004
-        msg = (
-            f"La serie debe tener al menos 12 datos con fechas válidas. "
-            f"Datos válidos: {len(df)}"
-        )
+        msg = "Se requieren al menos 12 datos válidos para el análisis SAMHIA completo."
         raise HTTPException(status_code=400, detail=msg)
 
     df = df.sort_values("date").reset_index(drop=True)
@@ -591,10 +585,7 @@ async def generate_outlier_plots(  # noqa: PLR0915
         ].copy()
 
     if len(df) < 12:  # noqa: PLR2004
-        msg = (
-            f"La serie debe tener al menos 12 datos con fechas válidas. "
-            f"Datos válidos: {len(df)}"
-        )
+        msg = "Se requieren al menos 12 datos válidos para el análisis SAMHIA completo."
         raise HTTPException(status_code=400, detail=msg)
 
     df = df.sort_values("date").reset_index(drop=True)
@@ -602,7 +593,7 @@ async def generate_outlier_plots(  # noqa: PLR0915
     series = pd.Series(df[request.series_name].dropna().to_numpy())
 
     if len(series) < 12:  # noqa: PLR2004
-        msg = "La serie debe tener al menos 12 datos válidos"
+        msg = "Se requieren al menos 12 datos válidos para el análisis SAMHIA completo."
         raise HTTPException(status_code=400, detail=msg)
 
     # Ejecutar test Kn para obtener límites
